@@ -1,19 +1,27 @@
-# Dogfood: gifsmith renders its own README demo on every change to the engine
-# or the example, and commits the refreshed docs/demo.{gif,webp}. This is the
-# vhs-action pattern — the hero GIF stays true to the current code.
-name: demo
+# CI + dogfood: build gifsmith and prove it can render its own demo end-to-end
+# on a clean Linux machine (browser auto-detected, ffmpeg, headless). The
+# rendered demo is uploaded as an artifact — we do NOT auto-commit it back, to
+# keep main free of churn from non-deterministic captures.
+name: ci
 
 on:
   push:
-    branches: [main, master]
-    paths: ['src/**', 'examples/**', '.github/workflows/demo.yml']
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'examples/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/**'
+  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  render:
+  build-and-render:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,23 +43,20 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Render the demo
+      - name: Render the demo (dogfood smoke test)
         env:
           PUPPETEER_EXECUTABLE_PATH: ${{ steps.chrome.outputs.chrome-path }}
-        run: |
-          node examples/hello-web/demo.mjs
-          mkdir -p docs
-          cp examples/hello-web/out/demo.gif  docs/demo.gif
-          cp examples/hello-web/out/demo.webp docs/demo.webp
+          GIFSMITH_NO_SANDBOX: '1' # Chrome runs as root on the runner
+        run: node examples/hello-web/demo.mjs
 
-      - name: Commit refreshed demo
+      - name: Assert the demo rendered
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/demo.gif docs/demo.webp
-          if git diff --staged --quiet; then
-            echo "demo unchanged"
-          else
-            git commit -m "chore(demo): regenerate README demo [skip ci]"
-            git push
-          fi
+          test -s examples/hello-web/out/demo.gif
+          test -s examples/hello-web/out/demo.webp
+          echo "gifsmith rendered its own demo on a clean machine"
+
+      - name: Upload the rendered demo
+        uses: actions/upload-artifact@v4
+        with:
+          name: gifsmith-demo
+          path: examples/hello-web/out/demo.*
