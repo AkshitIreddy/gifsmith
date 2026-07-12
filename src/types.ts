@@ -76,6 +76,18 @@ export interface PropContext {
   compose: ComposeMode;
 }
 
+/** Options for `compose: 'stage'` — the app embedded as a window on a desktop. */
+export interface StageOptions {
+  /** Window titlebar text. */
+  title?: string;
+  /** Wallpaper base hue 0–360 (default 222). */
+  hue?: number;
+  /** Desktop margin around the window in px (how much wallpaper shows). */
+  padding?: number;
+  /** Window chrome style. */
+  os?: 'windows' | 'mac';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Timeline
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +212,8 @@ export interface RenderConfig {
   viewport?: Viewport;
   camera?: CameraClip | null;
   compose?: ComposeMode;
+  /** Options for `compose: 'stage'` (app-in-a-window on a mock desktop). */
+  stage?: StageOptions;
 
   /** Props to inject (from `gifsmith/props`), applied back-to-front. */
   props?: Prop[];

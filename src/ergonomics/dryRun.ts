@@ -11,7 +11,7 @@ import { connect } from '../browser.js';
 import { composeScene } from '../scene.js';
 import { estimateSeconds } from '../timeline/timeline.js';
 
-type SceneConfig = Pick<RenderConfig, 'target' | 'props' | 'timeline' | 'viewport' | 'camera' | 'compose' | 'logLevel'>;
+type SceneConfig = Pick<RenderConfig, 'target' | 'props' | 'timeline' | 'viewport' | 'camera' | 'compose' | 'stage' | 'logLevel'>;
 
 function collectSelectors(steps: Step[], acc: { sel: string; kind: string }[]): void {
   for (const s of steps) {
@@ -35,21 +35,25 @@ export async function dryRun(cfg: SceneConfig): Promise<DryRunReport> {
   }
 
   const viewport = { width: 1280, height: 800, deviceScaleFactor: 1, ...(cfg.viewport ?? {}) };
-  const conn = await connect(cfg.target, viewport, log);
+  const compose = cfg.compose ?? 'overlay';
+  const connectTarget = compose === 'stage' ? { ...cfg.target, url: undefined } : cfg.target;
+  const conn = await connect(connectTarget, viewport, log);
   try {
-    if (cfg.target.url && !conn.owned) await conn.page.goto(cfg.target.url, { waitUntil: 'load', timeout: 30_000 });
-    if (cfg.props?.length) {
-      await composeScene(conn.page, {
-        props: cfg.props,
-        compose: cfg.compose ?? 'overlay',
-        ctx: { viewport, camera: cfg.camera ?? null, compose: cfg.compose ?? 'overlay' },
-        log,
-      });
-    }
+    if (cfg.target.url && !conn.owned && compose !== 'stage') await conn.page.goto(cfg.target.url, { waitUntil: 'load', timeout: 30_000 });
+    const comp = await composeScene(conn.page, {
+      props: cfg.props ?? [],
+      compose,
+      ctx: { viewport, camera: cfg.camera ?? null, compose },
+      targetUrl: cfg.target.url,
+      stage: cfg.stage,
+      log,
+    });
+    // In stage mode the app (and its selectors) live in the iframe.
+    const selDriver = comp.appFrame ?? conn.page;
     const selectors: { sel: string; kind: string }[] = [];
     collectSelectors(cfg.timeline.steps, selectors);
     for (const { sel, kind } of selectors) {
-      const exists = (await conn.page.evaluate((s: string) => {
+      const exists = (await selDriver.evaluate((s: string) => {
         try { return !!document.querySelector(s); } catch { return null; }
       }, sel)) as boolean | null;
       if (exists === null) errors.push(`Invalid selector syntax in ${kind}: "${sel}"`);

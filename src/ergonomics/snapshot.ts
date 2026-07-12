@@ -22,7 +22,7 @@ import { run } from '../encode/ffmpeg.js';
 
 type SceneConfig = Pick<
   RenderConfig,
-  'target' | 'props' | 'timeline' | 'viewport' | 'camera' | 'compose' | 'bridge' | 'logLevel'
+  'target' | 'props' | 'timeline' | 'viewport' | 'camera' | 'compose' | 'stage' | 'bridge' | 'logLevel'
 >;
 
 async function screenshotBase64(page: Page, camera: RenderConfig['camera']): Promise<string> {
@@ -34,20 +34,24 @@ async function screenshotBase64(page: Page, camera: RenderConfig['camera']): Pro
 async function withScene<T>(cfg: SceneConfig, fn: (page: Page, ctx: PlayContext, log: Logger) => Promise<T>): Promise<T> {
   const log = new Logger(cfg.logLevel ?? 'warn');
   const viewport = { width: 1280, height: 800, deviceScaleFactor: 1, ...(cfg.viewport ?? {}) };
-  const conn = await connect(cfg.target, viewport, log);
+  const compose = cfg.compose ?? 'overlay';
+  const connectTarget = compose === 'stage' ? { ...cfg.target, url: undefined } : cfg.target;
+  const conn = await connect(connectTarget, viewport, log);
   try {
-    if (cfg.target.url && !conn.owned) {
+    if (cfg.target.url && !conn.owned && compose !== 'stage') {
       await conn.page.goto(cfg.target.url, { waitUntil: 'load', timeout: 30_000 });
     }
     await conn.page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: viewport.deviceScaleFactor ?? 1 }).catch(() => {});
-    await composeScene(conn.page, {
+    const comp = await composeScene(conn.page, {
       props: cfg.props ?? [],
-      compose: cfg.compose ?? 'overlay',
-      ctx: { viewport, camera: cfg.camera ?? null, compose: cfg.compose ?? 'overlay' },
+      compose,
+      ctx: { viewport, camera: cfg.camera ?? null, compose },
+      targetUrl: cfg.target.url,
+      stage: cfg.stage,
       log,
     });
-    await setupBridge(conn.page, cfg.bridge ?? {}, log);
-    const ctx: PlayContext = { startMs: Date.now(), cueTimes: {}, anchorMs: null, log };
+    await setupBridge(comp.appFrame ?? conn.page, cfg.bridge ?? {}, log);
+    const ctx: PlayContext = { startMs: Date.now(), cueTimes: {}, anchorMs: null, log, appFrame: comp.appFrame };
     return await fn(conn.page, ctx, log);
   } finally {
     if (conn.owned) await conn.browser.close();

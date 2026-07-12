@@ -46,6 +46,7 @@ export type {
   Viewport,
   CameraClip,
   ComposeMode,
+  StageOptions,
   Prop,
   PropContext,
   CompiledTimeline,

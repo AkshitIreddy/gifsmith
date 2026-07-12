@@ -15,7 +15,7 @@
  *    actions, and slowing streaming for a clean capture. gifsmith never
  *    requires it; without it, we drive the DOM directly.
  */
-import type { Page } from 'puppeteer-core';
+import type { Frame, Page } from 'puppeteer-core';
 import { Logger } from './log.js';
 
 /** Injected once into the page. Pure browser JS (no template literals inside). */
@@ -143,17 +143,17 @@ export interface BridgeSetup {
  * apps that only read the flag. Optionally waits for the bridge to appear.
  */
 export async function setupBridge(
-  page: Page,
+  target: Page | Frame,
   opts: { pace?: number; require?: boolean; requireTimeoutMs?: number },
   log: Logger,
 ): Promise<BridgeSetup> {
   if (opts.require) {
     log.step('bridge', 'waiting for window.__demo');
-    await page.waitForFunction('!!window.__demo', { timeout: opts.requireTimeoutMs ?? 15_000 });
+    await target.waitForFunction('!!window.__demo', { timeout: opts.requireTimeoutMs ?? 15_000 });
   }
-  const present = (await page.evaluate('!!window.__demo')) as boolean;
+  const present = (await target.evaluate('!!window.__demo')) as boolean;
   if (opts.pace != null) {
-    await page.evaluate((mult: number) => {
+    await target.evaluate((mult: number) => {
       (window as any).__DEMO_PACE__ = mult;
       const d = (window as any).__demo;
       if (d && typeof d.pace === 'function') { try { d.pace(mult); } catch (e) {} }

@@ -68,14 +68,17 @@ export async function render(cfg: RenderConfig): Promise<RenderResult> {
     const play: PlayContext = { startMs: 0, cueTimes: {}, anchorMs: null, log };
 
     let cap: CaptureHandle | undefined;
+    // In stage mode the app is loaded inside an iframe, so the top page starts
+    // blank (don't navigate it to the target).
+    const connectTarget = compose === 'stage' ? { ...cfg.target, url: undefined } : cfg.target;
     // Render in a sandboxed, throwaway browser profile under the work dir, so
     // the capture never touches the user's real browser data and is cleaned up
     // with everything else.
-    const conn = await connect(cfg.target, viewport, log, {
+    const conn = await connect(connectTarget, viewport, log, {
       userDataDir: path.join(workRoot, 'profile'),
     });
     try {
-      if (cfg.target.url && !conn.owned) {
+      if (cfg.target.url && !conn.owned && compose !== 'stage') {
         await conn.page.goto(cfg.target.url, { waitUntil: 'load', timeout: 30_000 });
       }
       try {
@@ -88,13 +91,16 @@ export async function render(cfg: RenderConfig): Promise<RenderResult> {
         /* attached real windows may refuse a resize; harmless */
       }
 
-      await composeScene(conn.page, {
+      const comp = await composeScene(conn.page, {
         props: cfg.props ?? [],
         compose,
         ctx: { viewport, camera: cfg.camera ?? null, compose },
+        targetUrl: cfg.target.url,
+        stage: cfg.stage,
         log,
       });
-      await setupBridge(conn.page, cfg.bridge ?? {}, log);
+      play.appFrame = comp.appFrame;
+      await setupBridge(comp.appFrame ?? conn.page, cfg.bridge ?? {}, log);
 
       cap = await startScreencast(conn.page, framesDir, log, { clip: cfg.camera ?? null });
       play.startMs = Date.now();
