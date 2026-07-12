@@ -13,6 +13,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import type { CameraClip } from '../types.js';
 import { run } from '../encode/ffmpeg.js';
 
 const MIN_DT = 1 / 60; // clamp floor: never below ~60fps spacing
@@ -65,15 +66,27 @@ export async function resampleToPaced(
   pacedDir: string,
   fps: number,
   width: number,
+  camera?: CameraClip | null,
 ): Promise<string[]> {
   fs.mkdirSync(pacedDir, { recursive: true });
   const pattern = path.join(pacedDir, '%05d.png');
+  // Camera clip crops the captured frame to a sub-region first (coords are CSS
+  // px; assumes deviceScaleFactor 1, the default). Then resample to a uniform
+  // clock and scale to the target width.
+  const filters: string[] = [];
+  if (camera) {
+    const cw = Math.max(2, Math.round(camera.width));
+    const ch = Math.max(2, Math.round(camera.height));
+    filters.push(`crop=${cw}:${ch}:${Math.round(camera.x)}:${Math.round(camera.y)}`);
+  }
+  filters.push(`fps=${fps}`);
+  filters.push(`scale=${width}:-2:flags=lanczos`);
   await run([
     '-y',
     '-f', 'concat',
     '-safe', '0',
     '-i', concatPath,
-    '-vf', `fps=${fps},scale=${width}:-2:flags=lanczos`,
+    '-vf', filters.join(','),
     pattern,
   ]);
   return fs

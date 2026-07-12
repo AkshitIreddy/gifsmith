@@ -121,7 +121,7 @@ export async function render(cfg: RenderConfig): Promise<RenderResult> {
     // ---- pacing -------------------------------------------------------------
     log.step('pacing', `${frames.length} frames → uniform ${encode.fps}fps @ ${encode.width}px`);
     const paced = writeConcat(framesDir, frames, timestamps, encode.speed);
-    const pacedFrames = await resampleToPaced(paced.concatPath, pacedDir, encode.fps, encode.width);
+    const pacedFrames = await resampleToPaced(paced.concatPath, pacedDir, encode.fps, encode.width, cfg.camera ?? null);
     if (pacedFrames.length === 0) throw new Error('gifsmith: pacing produced no frames');
 
     // ---- loop ---------------------------------------------------------------
