@@ -169,6 +169,19 @@ export interface BrowserTarget {
   args?: string[];
   /** Run with a visible window (default headless). */
   headful?: boolean;
+  /**
+   * Chromium's OS-level sandbox. Default true. Set false ONLY inside a
+   * container / CI / when running as root, where the sandbox can't initialize
+   * (adds --no-sandbox --disable-setuid-sandbox). gifsmith always renders in a
+   * throwaway, isolated browser profile regardless — this flag is unrelated to
+   * that isolation; it only concerns Chromium's own process sandbox.
+   */
+  chromiumSandbox?: boolean;
+  /**
+   * In headful mode, park the window far off-screen so the capture never
+   * flashes on your desktop. Default true. Ignored when headless.
+   */
+  offscreen?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

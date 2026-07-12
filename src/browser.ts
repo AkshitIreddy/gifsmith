@@ -54,10 +54,21 @@ export interface Connection {
   owned: boolean;
 }
 
+export interface LaunchExtras {
+  /**
+   * An isolated, throwaway profile directory. gifsmith always renders in a
+   * sandboxed profile so it never reads or writes your real browser's
+   * cookies/session/history; the Director points this at a temp dir it deletes
+   * afterwards. If omitted, puppeteer auto-creates and removes its own.
+   */
+  userDataDir?: string;
+}
+
 export async function connect(
   target: BrowserTarget,
   viewport: Viewport,
   log: Logger,
+  extras: LaunchExtras = {},
 ): Promise<Connection> {
   const defaultViewport = {
     width: viewport.width,
@@ -77,22 +88,32 @@ export async function connect(
     return { browser, page, owned: false };
   }
 
-  // Launch mode — spin up a detected browser.
+  // Launch mode — spin up a detected browser in an isolated, throwaway profile
+  // (a sandbox): headless + muted by default, never touching the user's real
+  // browser data. See LaunchExtras.userDataDir.
   const executablePath = findChrome(target.executablePath);
   log.step('launch', executablePath, target.headful ? '(headful)' : '(headless)');
+  const args = [
+    `--window-size=${viewport.width},${viewport.height}`,
+    '--hide-scrollbars',
+    '--force-color-profile=srgb',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--mute-audio',
+  ];
+  if (target.chromiumSandbox === false) {
+    args.push('--no-sandbox', '--disable-setuid-sandbox');
+  }
+  if (target.headful && target.offscreen !== false) {
+    args.push('--window-position=-32000,-32000');
+  }
+  args.push(...(target.args || []));
   const browser = await puppeteer.launch({
     executablePath,
     headless: !target.headful,
     defaultViewport,
-    args: [
-      `--window-size=${viewport.width},${viewport.height}`,
-      '--hide-scrollbars',
-      '--force-color-profile=srgb',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--mute-audio',
-      ...(target.args || []),
-    ],
+    userDataDir: extras.userDataDir,
+    args,
   });
   // If page creation or the initial navigation fails, tear down the browser we
   // just launched — otherwise the Chromium process is orphaned (connect() never

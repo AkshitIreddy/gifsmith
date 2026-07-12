@@ -68,7 +68,12 @@ export async function render(cfg: RenderConfig): Promise<RenderResult> {
     const play: PlayContext = { startMs: 0, cueTimes: {}, anchorMs: null, log };
 
     let cap: CaptureHandle | undefined;
-    const conn = await connect(cfg.target, viewport, log);
+    // Render in a sandboxed, throwaway browser profile under the work dir, so
+    // the capture never touches the user's real browser data and is cleaned up
+    // with everything else.
+    const conn = await connect(cfg.target, viewport, log, {
+      userDataDir: path.join(workRoot, 'profile'),
+    });
     try {
       if (cfg.target.url && !conn.owned) {
         await conn.page.goto(cfg.target.url, { waitUntil: 'load', timeout: 30_000 });
@@ -186,7 +191,7 @@ export async function render(cfg: RenderConfig): Promise<RenderResult> {
     } else if (autoWork) {
       try { fs.rmSync(workRoot, { recursive: true, force: true }); } catch { /* ignore */ }
     } else {
-      for (const d of ['frames', 'paced', 'rot', 'loop']) {
+      for (const d of ['frames', 'paced', 'rot', 'loop', 'profile']) {
         try { fs.rmSync(path.join(workRoot, d), { recursive: true, force: true }); } catch { /* ignore */ }
       }
     }
