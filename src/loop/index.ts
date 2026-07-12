@@ -1,41 +1,37 @@
 /**
- * Loop planning. Given the paced frames and the chosen strategy, decide how the
- * seamless loop is built and hand the encoder a concrete plan.
+ * Loop planning. Given the paced frames and the chosen strategy, produce a
+ * concrete set of PNG loop frames the encoder turns into a GIF/WebP.
  *
  *   auto      → anchor if the timeline declared a loopAnchor, else crossfade
  *   anchor    → trim to the best hold-to-hold seam (artifact-free)
- *   crossfade → half-period self-crossfade (works on any ambient clip)
+ *   crossfade → half-period self-crossfade, materialized to PNG frames
  *   none      → straight clip, no looping
+ *
+ * The crossfade blend is rendered to its own PNG sequence in one ffmpeg pass
+ * (rather than blended live into the final encoder) — two image2 inputs feeding
+ * libwebp_anim can deadlock, and materializing means every downstream encoder
+ * gets one simple frame sequence.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import type { LoopStrategy } from '../types.js';
 import { Logger } from '../log.js';
+import { run } from '../encode/ffmpeg.js';
 import { thumbnails, mse } from './mse.js';
 import { findAnchorLoop } from './anchor.js';
 import { prepareCrossfade } from './crossfade.js';
 
-export type LoopPlan =
-  | {
-      kind: 'frames';
-      dir: string;
-      fps: number;
-      frameCount: number;
-      strategy: LoopStrategy;
-      seamMSE: number | null;
-      anchorFrame?: number;
-      endFrame?: number;
-    }
-  | {
-      kind: 'crossfade';
-      pacedDir: string;
-      rotDir: string;
-      blendFilter: string;
-      fps: number;
-      frameCount: number;
-      strategy: LoopStrategy;
-      seamMSE: number | null;
-    };
+export interface LoopPlan {
+  /** Directory of the final loop frames as %05d.png. */
+  dir: string;
+  fps: number;
+  frameCount: number;
+  strategy: LoopStrategy;
+  /** Loop-seam MSE for reporting (null when the seam is removed by crossfade). */
+  seamMSE: number | null;
+  anchorFrame?: number;
+  endFrame?: number;
+}
 
 export interface PlanLoopArgs {
   strategy: LoopStrategy;
@@ -65,28 +61,32 @@ export async function planLoop(args: PlanLoopArgs): Promise<LoopPlan> {
   // empty sequence (which would make ffmpeg fail).
   if (n < 2) {
     log.warn(`only ${n} paced frame(s); emitting a still clip (no loop).`);
-    return { kind: 'frames', dir: pacedDir, fps, frameCount: n, strategy, seamMSE: 0 };
+    return { dir: pacedDir, fps, frameCount: n, strategy, seamMSE: 0 };
   }
 
   if (strategy === 'none') {
     const thumbs = await thumbnails(pacedDir);
-    const seam = n > 1 ? mse(thumbs[0], thumbs[n - 1]) : 0;
-    return { kind: 'frames', dir: pacedDir, fps, frameCount: n, strategy, seamMSE: seam };
+    const seam = mse(thumbs[0], thumbs[n - 1]);
+    return { dir: pacedDir, fps, frameCount: n, strategy, seamMSE: seam };
   }
 
   if (strategy === 'crossfade') {
     const prep = prepareCrossfade(pacedDir, pacedFrames);
-    log.step('loop', `crossfade over ${prep.frameCount} frames`);
-    return {
-      kind: 'crossfade',
-      pacedDir,
-      rotDir: prep.rotDir,
-      blendFilter: prep.blendFilter,
-      fps,
-      frameCount: prep.frameCount,
-      strategy,
-      seamMSE: null,
-    };
+    const blendDir = path.join(path.dirname(pacedDir), 'blend');
+    fs.rmSync(blendDir, { recursive: true, force: true });
+    fs.mkdirSync(blendDir, { recursive: true });
+    // One pass: paced frames + their half-period rotation → the blended loop.
+    await run([
+      '-y',
+      '-thread_queue_size', '1024', '-framerate', String(fps), '-start_number', '0', '-i', path.join(pacedDir, '%05d.png'),
+      '-thread_queue_size', '1024', '-framerate', String(fps), '-start_number', '0', '-i', path.join(prep.rotDir, '%05d.png'),
+      '-filter_complex', prep.blendFilter,
+      '-start_number', '0',
+      path.join(blendDir, '%05d.png'),
+    ]);
+    const blended = fs.readdirSync(blendDir).filter((f) => f.endsWith('.png')).sort().map((f) => path.join(blendDir, f));
+    log.step('loop', `crossfade over ${blended.length} frames`);
+    return { dir: blendDir, fps, frameCount: blended.length, strategy, seamMSE: null };
   }
 
   // anchor
@@ -115,7 +115,6 @@ export async function planLoop(args: PlanLoopArgs): Promise<LoopPlan> {
     fs.copyFileSync(pacedFrames[i], path.join(loopDir, String(j++).padStart(5, '0') + '.png'));
   }
   return {
-    kind: 'frames',
     dir: loopDir,
     fps,
     frameCount: j,

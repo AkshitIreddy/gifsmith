@@ -25,14 +25,6 @@ export async function encodeGif(
     `split[a][b];[a]palettegen=max_colors=${opts.colors}:stats_mode=diff[p];` +
     `[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`;
 
-  const args = ['-y', ...src.inputs];
-  if (src.complex) {
-    args.push('-filter_complex', `${src.leadFilter},${palette}`);
-  } else {
-    args.push('-vf', palette);
-  }
-  args.push('-loop', '0', '-f', 'gif', outPath);
-
-  await run(args);
+  await run(['-y', ...src.inputs, '-vf', palette, '-loop', '0', '-f', 'gif', outPath]);
   return fs.statSync(outPath).size;
 }

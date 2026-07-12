@@ -183,8 +183,8 @@ export async function render(cfg: RenderConfig): Promise<RenderResult> {
       loop: {
         strategy: plan.strategy,
         seamMSE: plan.seamMSE,
-        anchorFrame: plan.kind === 'frames' ? plan.anchorFrame : undefined,
-        endFrame: plan.kind === 'frames' ? plan.endFrame : undefined,
+        anchorFrame: plan.anchorFrame,
+        endFrame: plan.endFrame,
       },
       durationSeconds: Number((plan.frameCount / encode.fps).toFixed(2)),
       warnings,
@@ -197,7 +197,7 @@ export async function render(cfg: RenderConfig): Promise<RenderResult> {
     } else if (autoWork) {
       try { fs.rmSync(workRoot, { recursive: true, force: true }); } catch { /* ignore */ }
     } else {
-      for (const d of ['frames', 'paced', 'rot', 'loop', 'profile']) {
+      for (const d of ['frames', 'paced', 'rot', 'loop', 'blend', 'profile']) {
         try { fs.rmSync(path.join(workRoot, d), { recursive: true, force: true }); } catch { /* ignore */ }
       }
     }

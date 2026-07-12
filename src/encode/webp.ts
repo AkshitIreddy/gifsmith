@@ -17,13 +17,9 @@ export async function encodeWebp(
 ): Promise<number> {
   fs.mkdirSync(path.dirname(path.resolve(outPath)), { recursive: true });
   const src = resolveSource(plan);
-
-  const args = ['-y', ...src.inputs];
-  if (src.complex) {
-    // Give the blend output an explicit label and map it, so libwebp animates.
-    args.push('-filter_complex', `${src.leadFilter}[v]`, '-map', '[v]');
-  }
-  args.push(
+  await run([
+    '-y',
+    ...src.inputs,
     '-c:v', 'libwebp_anim',
     '-lossless', '0',
     '-q:v', String(opts.quality),
@@ -32,8 +28,6 @@ export async function encodeWebp(
     '-an',
     '-f', 'webp',
     outPath,
-  );
-
-  await run(args);
+  ]);
   return fs.statSync(outPath).size;
 }
