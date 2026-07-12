@@ -160,9 +160,11 @@ $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222 --rem
 Start-Process .\your-app.exe
 ```
 
+The [Cadence/Electron example](examples/electron-app/) is a complete, runnable attach recording (launch → attach → record) — the same flow applies to Tauri.
+
 ## Size budgeting & gotchas
 
-- Knobs: `width`, `fps`, `speed`, `colors` (GIF palette), `quality` (WebP), `targetMB` (warns if exceeded).
+- Knobs: `width`, `fps`, `speed`, `colors` (GIF palette), `quality` (WebP), `targetMB` (warns if exceeded); `camera` clips output to a sub-region.
 - **Bayer (ordered) dither** for GIF, not error-diffusion — it keeps a static pattern frame-to-frame so inter-frame compression stays effective (the difference between ~25 MB and ~2 MB on a text UI).
 - **WebP** is smaller and cleaner than GIF for modern READMEs; gifsmith emits both (`alsoEmit: ['webp']`). GitHub renders animated WebP inline.
 - **Animated backgrounds wreck compression** — prefer a quiet background while recording.
@@ -170,7 +172,35 @@ Start-Process .\your-app.exe
 
 ## Composition modes
 
-`overlay` (default) drives the app at top level and injects props as DOM layers — robust for any app, and the full movie set for transparent/overlay apps. `stage` (embedding the app in an `<iframe>` on a full mock desktop, same-origin) is on the roadmap.
+`overlay` (default) drives the app at top level and injects props as DOM layers — robust for any app, and the full movie set for transparent/overlay apps.
+
+`stage` renders the app inside an `<iframe>` as a **window on a mock desktop** (wallpaper + a titled window). The app is driven inside the frame — Puppeteer handles it even cross-origin — while the synthetic cursor and props live on the top page, with cursor coordinates mapped through the iframe offset. Stage mode needs an http(s) target (a dev server); a `file://` app can't be framed by a non-file page. See the [Halo example](examples/halo/).
+
+```ts
+await render({ target: web('http://localhost:5173'), out: 'demo.gif',
+  compose: 'stage', stage: { title: 'My App', os: 'mac' }, timeline: tl });
+```
+
+## Sandbox & isolation
+
+gifsmith always renders in an **isolated, throwaway browser profile** — a fresh `userDataDir` it creates under a temp work dir and deletes afterwards — so a capture never reads or writes your real browser's cookies, session, or history. It runs headless, muted, and (headful) off-screen. For CI/containers, set `chromiumSandbox: false` on the target (adds `--no-sandbox`), and there's a [`Dockerfile`](Dockerfile) for hermetic, host-independent rendering (Chromium + ffmpeg baked in).
+
+## Examples
+
+A gallery of self-contained demos, each showing a different capability — see [`examples/`](examples/) for the full set and runnable sources.
+
+| Demo | Shows |
+|---|---|
+| [Aurora](examples/hello-web/) | overlay mode · anchor loop · synthetic cursor |
+| [Pulse](examples/pulse/) | cursor journey · re-animated dashboard · anchor loop |
+| [Halo](examples/halo/) | **stage mode** — app as a window on a desktop |
+| [Forge](examples/forge/) | **camera clip** on a CI pipeline · crossfade loop |
+| [Cadence](examples/electron-app/) | the **`electron()` attach adapter** — a real Electron app, end-to-end |
+
+<p>
+  <img src="examples/pulse/demo.webp" width="49%" alt="Pulse demo" />
+  <img src="examples/halo/demo.webp" width="49%" alt="Halo stage-mode demo" />
+</p>
 
 ## Alternatives
 
@@ -186,7 +216,7 @@ gifsmith deliberately reuses the good parts (CDP screencast, ffmpeg palette) and
 
 ## Roadmap
 
-Stage/iframe composition · Tauri/Electron end-to-end recipes · a richer MCP surface · more prop kits.
+A richer MCP surface · more prop kits · deeper Tauri recipes · per-actor camera tracking.
 
 ## License
 
