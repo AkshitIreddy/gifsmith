@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Deploy Pipeline</title>
+<style>
+  :root{
+    --bg:#08080b;
+    --panel:rgba(255,255,255,.022);
+    --panel-2:rgba(255,255,255,.035);
+    --line:rgba(255,255,255,.08);
+    --line-soft:rgba(255,255,255,.055);
+    --txt:#eef0f6;
+    --txt-dim:#9aa0b0;
+    --txt-faint:#646b7d;
+    --acc-1:#7b6cff;
+    --acc-2:#b45cff;
+    --green:#39d98a;
+    --amber:#ffb43d;
+    --blue:#4aa8ff;
+    --red:#ff6b81;
+    --grad:linear-gradient(135deg,var(--acc-1),var(--acc-2));
+    --mono:"SFMono-Regular",ui-monospace,"Cascadia Mono","Consolas",monospace;
+    --sans:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--txt);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    letter-spacing:.1px;
+  }
+  /* ambient background glow */
+  body::before{
+    content:"";position:fixed;inset:-20% -10% auto -10%;height:70%;
+    background:
+      radial-gradient(60% 60% at 18% 0%,rgba(123,108,255,.16),transparent 70%),
+      radial-gradient(50% 50% at 82% 8%,rgba(180,92,255,.10),transparent 70%);
+    filter:blur(10px);pointer-events:none;z-index:0;
+    animation:breathe 11s ease-in-out infinite;
+  }
+  @keyframes breathe{0%,100%{opacity:.75;transform:translateY(0)}50%{opacity:1;transform:translateY(6px)}}
+
+  .app{
+    position:relative;z-index:1;
+    display:grid;grid-template-columns:236px 1fr;
+    width:1200px;height:760px;margin:0 auto;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    border-right:1px solid var(--line);
+    padding:20px 16px;display:flex;flex-direction:column;gap:18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.018),transparent 40%);
+  }
+  .brand{display:flex;align-items:center;gap:11px;padding:2px 4px}
+  .brand .mark{
+    width:32px;height:32px;border-radius:9px;display:grid;place-items:center;
+    background:var(--grad);box-shadow:0 6px 18px -6px rgba(123,108,255,.7);
+  }
+  .brand .mark svg{width:18px;height:18px}
+  .brand h1{font-size:15px;font-weight:650;margin:0;letter-spacing:.2px}
+  .brand span{font-size:11px;color:var(--txt-faint);display:block;margin-top:1px;font-weight:500}
+
+  .selector{
+    border:1px solid var(--line);border-radius:12px;padding:11px 12px;
+    background:var(--panel);cursor:pointer;transition:border-color .2s,background .2s;
+  }
+  .selector:hover{border-color:rgba(255,255,255,.16);background:var(--panel-2)}
+  .selector .row{display:flex;align-items:center;gap:9px}
+  .selector .repo{font-size:13px;font-weight:600}
+  .selector .repo .org{color:var(--txt-faint);font-weight:500}
+  .selector .chev{margin-left:auto;color:var(--txt-faint)}
+  .selector .branch{
+    display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:9px;
+    border-top:1px solid var(--line-soft);font-size:12px;color:var(--txt-dim);
+    font-family:var(--mono);
+  }
+  .selector .branch svg{width:13px;height:13px;color:var(--txt-faint)}
+  .selector .branch b{color:var(--txt);font-weight:600}
+
+  nav{display:flex;flex-direction:column;gap:2px;margin-top:2px}
+  .nav-label{font-size:10.5px;letter-spacing:.14em;color:var(--txt-faint);text-transform:uppercase;font-weight:650;padding:0 8px 6px}
+  .nav-item{
+    display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;
+    font-size:13px;color:var(--txt-dim);cursor:pointer;font-weight:500;
+    transition:background .16s,color .16s;position:relative;
+  }
+  .nav-item svg{width:16px;height:16px;opacity:.85}
+  .nav-item:hover{background:var(--panel-2);color:var(--txt)}
+  .nav-item.active{background:rgba(123,108,255,.13);color:#fff}
+  .nav-item.active::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2.5px;border-radius:2px;background:var(--grad)}
+  .nav-item .badge{margin-left:auto;font-size:10.5px;background:rgba(255,255,255,.08);color:var(--txt-dim);padding:1px 7px;border-radius:20px;font-weight:600}
+
+  .side-foot{margin-top:auto;border-top:1px solid var(--line-soft);padding-top:14px}
+  .user{display:flex;align-items:center;gap:10px}
+  .avatar{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#2a2f45,#3d2f52);display:grid;place-items:center;font-size:12px;font-weight:700;color:#cfd3e6;border:1px solid var(--line)}
+  .user .meta{font-size:12px;line-height:1.35}
+  .user .meta b{font-weight:600;display:block}
+  .user .meta small{color:var(--txt-faint)}
+
+  /* ---------- Main ---------- */
+  .main{padding:22px 26px 24px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+
+  .topbar{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+  .topbar .h{min-width:0}
+  .topbar h2{font-size:19px;font-weight:650;margin:0;letter-spacing:.1px}
+  .topbar .sub{font-size:12.5px;color:var(--txt-dim);margin-top:3px;display:flex;align-items:center;gap:8px}
+  .topbar .sub .dot{width:5px;height:5px;border-radius:50%;background:var(--txt-faint)}
+  .topbar .sub code{font-family:var(--mono);color:var(--acc-1);font-size:12px}
+  .topbar .spacer{flex:1}
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--txt-dim);
+    border:1px solid var(--line);background:var(--panel);padding:7px 12px;border-radius:9px;font-weight:500;
+  }
+  .pill .live{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(57,217,138,.6);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(57,217,138,.55)}70%{box-shadow:0 0 0 6px rgba(57,217,138,0)}100%{box-shadow:0 0 0 0 rgba(57,217,138,0)}}
+
+  .run{
+    display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);
+    font-size:13px;font-weight:600;color:#fff;cursor:pointer;
+    border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:9px 16px;
+    background:var(--grad);background-size:160% 160%;
+    box-shadow:0 8px 22px -10px rgba(123,108,255,.75),inset 0 1px 0 rgba(255,255,255,.22);
+    transition:transform .12s,box-shadow .2s,filter .2s;
+  }
+  .run svg{width:15px;height:15px}
+  .run:hover{transform:translateY(-1px);box-shadow:0 12px 28px -10px rgba(123,108,255,.85),inset 0 1px 0 rgba(255,255,255,.25);animation:shift 3s linear infinite}
+  .run:active{transform:translateY(0)}
+  .run:disabled{cursor:default;filter:grayscale(.35) brightness(.82);box-shadow:none;transform:none}
+  @keyframes shift{to{background-position:160% 0}}
+
+  /* ---------- Pipeline ---------- */
+  .pipeline{display:flex;align-items:stretch;gap:0;margin-bottom:20px}
+  .stage{
+    flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    padding:15px 16px 16px;position:relative;overflow:hidden;
+    transition:border-color .3s,transform .3s,box-shadow .3s;
+    animation:rise .5s cubic-bezier(.2,.7,.3,1) backwards;
+  }
+  .stage:nth-child(1){animation-delay:.02s}
+  .stage:nth-child(3){animation-delay:.09s}
+  .stage:nth-child(5){animation-delay:.16s}
+  .stage:nth-child(7){animation-delay:.23s}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .connector{width:34px;flex:0 0 34px;display:grid;place-items:center;color:var(--txt-faint)}
+  .connector svg{width:16px;height:16px;opacity:.5}
+
+  .stage .top{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .stage .icn{
+    width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--txt-dim);
+    transition:color .3s,background .3s,border-color .3s;
+  }
+  .stage .icn svg{width:17px;height:17px}
+  .stage .name{font-size:13.5px;font-weight:600}
+  .stage .meta{font-size:11px;color:var(--txt-faint);margin-top:2px;font-family:var(--mono)}
+
+  .status{
+    margin-left:auto;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+    border:1px solid var(--line);color:var(--txt-dim);background:rgba(255,255,255,.03);
+    transition:all .3s;
+  }
+  .status .sd{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .progress{height:6px;border-radius:20px;background:rgba(255,255,255,.06);overflow:hidden;position:relative}
+  .bar{height:100%;width:0;border-radius:20px;background:var(--grad);transition:width .1s linear;position:relative}
+  .stage .foot{display:flex;justify-content:space-between;margin-top:9px;font-size:11px;color:var(--txt-faint);font-family:var(--mono)}
+  .stage .foot .pct{color:var(--txt-dim)}
+
+  /* stage states */
+  .stage[data-status="running"]{border-color:rgba(123,108,255,.4);box-shadow:0 0 0 1px rgba(123,108,255,.15),0 14px 40px -20px rgba(123,108,255,.8)}
+  .stage[data-status="running"] .icn{color:#fff;background:rgba(123,108,255,.16);border-color:rgba(123,108,255,.4)}
+  .stage[data-status="running"] .status{color:var(--amber);border-color:rgba(255,180,61,.3);background:rgba(255,180,61,.08)}
+  .stage[data-status="running"] .status .sd{animation:blink 1s infinite}
+  .stage[data-status="running"] .bar::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);
+    animation:sweep 1.1s linear infinite;
+  }
+  @keyframes sweep{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+  @keyframes blink{50%{opacity:.35}}
+  .stage[data-status="passed"] .icn{color:var(--green);background:rgba(57,217,138,.1);border-color:rgba(57,217,138,.28)}
+  .stage[data-status="passed"] .status{color:var(--green);border-color:rgba(57,217,138,.3);background:rgba(57,217,138,.08)}
+  .stage[data-status="passed"] .bar{background:linear-gradient(135deg,#2fbf7a,var(--green))}
+  .stage[data-status="queued"] .bar{background:rgba(255,255,255,.14)}
+  .stage[data-status="queued"] .status{color:var(--txt-faint)}
+
+  /* ---------- Bottom grid ---------- */
+  .bottom{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1.12fr;gap:18px}
+  .card{
+    border:1px solid var(--line);border-radius:14px;background:var(--panel);
+    display:flex;flex-direction:column;min-height:0;overflow:hidden;
+    animation:rise .55s cubic-bezier(.2,.7,.3,1) backwards .28s;
+  }
+  .card .hd{
+    display:flex;align-items:center;gap:10px;padding:12px 15px;
+    border-bottom:1px solid var(--line-soft);flex:0 0 auto;
+  }
+  .card .hd .t{font-size:13px;font-weight:600}
+  .card .hd .t svg{width:15px;height:15px;vertical-align:-3px;margin-right:7px;color:var(--txt-dim)}
+  .card .hd .r{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .tag{font-size:11px;color:var(--txt-dim);font-family:var(--mono);border:1px solid var(--line);padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.02)}
+
+  /* log */
+  .log{
+    flex:1;min-height:0;overflow-y:auto;padding:12px 15px;
+    font-family:var(--mono);font-size:12px;line-height:1.7;
+    background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,.12));
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;
+  }
+  .log::-webkit-scrollbar{width:8px}
+  .log::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:8px}
+  .log-line{
+    display:flex;gap:10px;white-space:pre-wrap;word-break:break-word;
+    opacity:0;transform:translateY(3px);transition:opacity .32s ease,transform .32s ease;
+  }
+  .log-line.show{opacity:1;transform:none}
+  .log-line .ts{color:var(--txt-faint);flex:0 0 auto}
+  .log-line .msg{color:#c6ccdb}
+  .log-line.info .lv{color:var(--blue)}
+  .log-line.ok .lv{color:var(--green)}
+  .log-line.ok .msg{color:#cdead9}
+  .log-line.warn .lv{color:var(--amber)}
+  .log-line.cmd .msg{color:#e7d9ff}
+  .log-line .lv{flex:0 0 auto;font-weight:600}
+  .cursor{display:inline-block;width:7px;height:14px;background:var(--acc-1);vertical-align:-2px;margin-left:2px;animation:blink 1.1s steps(1) infinite;border-radius:1px}
+
+  /* deployments table */
+  .tbl-wrap{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
+  .tbl-wrap::-webkit-scrollbar{width:8px}
+  .tbl-wrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:8px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  thead th{
+    position:sticky;top:0;background:#0d0d12;text-align:left;font-weight:600;
+    font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--txt-faint);
+    padding:9px 14px;border-bottom:1px solid var(--line-soft);z-index:2;
+  }
+  .deploy-row{transition:background .16s;cursor:pointer}
+  .deploy-row td{padding:11px 14px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  .deploy-row:hover{background:var(--panel-2)}
+  .deploy-row:last-child td{border-bottom:none}
+  .deploy-row.fresh{animation:flashin .8s ease}
+  @keyframes flashin{0%{background:rgba(123,108,255,.16)}100%{background:transparent}}
+  .hash{font-family:var(--mono);color:var(--txt);font-size:12px}
+  .env{font-weight:600}
+  .env small{display:block;color:var(--txt-faint);font-weight:500;font-size:11px;margin-top:1px;font-family:var(--mono)}
+  .who{color:var(--txt-dim)}
+  .ago{color:var(--txt-faint);font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+  .badge2{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .badge2 .sd{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .b-live{color:var(--green);background:rgba(57,217,138,.1);border:1px solid rgba(57,217,138,.25)}
+  .b-live .sd{animation:pulse2 1.8s infinite}
+  @keyframes pulse2{50%{opacity:.4}}
+  .b-ok{color:#8fa0b8;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+  .b-build{color:var(--amber);background:rgba(255,180,61,.09);border:1px solid rgba(255,180,61,.24)}
+  .b-fail{color:var(--red);background:rgba(255,107,129,.09);border:1px solid rgba(255,107,129,.24)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 14c0-3 2-5 4-5 0-3 2-5 4-5 1 3 0 4-1 5 2 0 4 1 5 4 1-1 2-1 3 0-.5 4-4 8-9 8s-6-4-6-7z" fill="#fff" opacity=".95"/></svg>
+      </div>
+      <div>
+        <h1>Forge</h1>
+        <span>Deploy Pipeline</span>
+      </div>
+    </div>
+
+    <div class="selector" title="Switch repository">
+      <div class="row">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa0b0" stroke-width="1.8"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H18a1 1 0 0 1 1 1v13"/><path d="M19 17H6a3 3 0 0 0 0 6h13v-6Z"/></svg>
+        <span class="repo"><span class="org">acme/</span>edge-gateway</span>
+        <span class="chev"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+      </div>
+      <div class="branch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="8" r="2.4"/><path d="M6 8.4v7.2M18 10.4c0 4-4 3.4-6 5"/></svg>
+        <b>main</b>&nbsp;· 4c1f9ae
+      </div>
+    </div>
+
+    <nav>
+      <div class="nav-label">Workspace</div>
+      <div class="nav-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h6M4 12h16M4 18h10"/><circle cx="17" cy="6" r="2"/><circle cx="14" cy="18" r="2"/></svg>
+        Pipelines
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        Deployments<span class="badge">18</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16"/></svg>
+        Environments
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5 19 19M19 5l-2.5 2.5M7.5 16.5 5 19"/><circle cx="12" cy="12" r="3"/></svg>
+        Runners<span class="badge">3</span>
+      </div>
+      <div class="nav-label" style="margin-top:14px">Insights</div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="m7 14 3-4 3 3 5-7"/></svg>
+        Analytics
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.3a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.7 7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 19.3 7l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.3Z"/></svg>
+        Settings
+      </div>
+    </nav>
+
+    <div class="side-foot">
+      <div class="user">
+        <div class="avatar">AK</div>
+        <div class="meta"><b>Akshit Reddy</b><small>Platform Team</small></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="topbar">
+      <div class="h">
+        <h2>Production Pipeline</h2>
+        <div class="sub">
+          <span>Triggered by push to <b style="color:var(--txt)">main</b></span>
+          <span class="dot"></span>
+          <code id="commitHash">4c1f9ae</code>
+          <span class="dot"></span>
+          <span>“fix: retry idempotent gateway writes”</span>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <span class="pill"><span class="live"></span> Runner online</span>
+      <button class="run">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.79-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14Z"/></svg>
+        Run pipeline
+      </button>
+    </div>
+
+    <!-- Pipeline -->
+    <section class="pipeline" id="pipeline">
+      <!-- Build -->
+      <div class="stage" data-stage="build" data-status="passed">
+        <div class="top">
+          <div class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></div>
+          <div><div class="name">Build</div><div class="meta">docker · node20</div></div>
+          <div class="status"><span class="sd"></span><span class="lbl">Passed</span></div>
+        </div>
+        <div class="progress"><div class="bar" style="width:100%"></div></div>
+        <div class="foot"><span class="dur">38s</span><span class="pct">100%</span></div>
+      </div>
+
+      <div class="connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+
+      <!-- Test -->
+      <div class="stage" data-stage="test" data-status="passed">
+        <div class="top">
+          <div class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h6M10 3v6.5L5.2 18a2 2 0 0 0 1.8 3h10a2 2 0 0 0 1.8-3L14 9.5V3"/><path d="M7.5 15h9"/></svg></div>
+          <div><div class="name">Test</div><div class="meta">vitest · 412</div></div>
+          <div class="status"><span class="sd"></span><span class="lbl">Passed</span></div>
+        </div>
+        <div class="progress"><div class="bar" style="width:100%"></div></div>
+        <div class="foot"><span class="dur">1m 12s</span><span class="pct">100%</span></div>
+      </div>
+
+      <div class="connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+
+      <!-- Scan -->
+      <div class="stage" data-stage="scan" data-status="passed">
+        <div class="top">
+          <div class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <div><div class="name">Scan</div><div class="meta">trivy · sast</div></div>
+          <div class="status"><span class="sd"></span><span class="lbl">Passed</span></div>
+        </div>
+        <div class="progress"><div class="bar" style="width:100%"></div></div>
+        <div class="foot"><span class="dur">24s</span><span class="pct">100%</span></div>
+      </div>
+
+      <div class="connector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+
+      <!-- Deploy -->
+      <div class="stage" data-stage="deploy" data-status="passed">
+        <div class="top">
+          <div class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4.5 16.5 3 21l4.5-1.5M14 4c3 0 6 3 6 6l-6 6-4-4 4-4c0-2-1.5-4-4-4Z" stroke-linejoin="round"/><path d="m9 11-4 1 3 3 1-4"/><circle cx="15" cy="9" r="1.3"/></svg></div>
+          <div><div class="name">Deploy</div><div class="meta">k8s · prod</div></div>
+          <div class="status"><span class="sd"></span><span class="lbl">Passed</span></div>
+        </div>
+        <div class="progress"><div class="bar" style="width:100%"></div></div>
+        <div class="foot"><span class="dur">19s</span><span class="pct">100%</span></div>
+      </div>
+    </section>
+
+    <!-- Bottom: log + deployments -->
+    <section class="bottom">
+      <!-- Log -->
+      <div class="card">
+        <div class="hd">
+          <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Build output</span>
+          <div class="r"><span class="tag" id="logStage">idle</span></div>
+        </div>
+        <div class="log" id="log">
+          <div class="log-line info show"><span class="ts">10:41:02</span><span class="lv">›</span><span class="msg">Runner <b style="color:#e7d9ff">forge-prod-2</b> acquired · linux/amd64</span></div>
+          <div class="log-line cmd show"><span class="ts">10:41:02</span><span class="lv">$</span><span class="msg">git checkout 4c1f9ae</span></div>
+          <div class="log-line ok show"><span class="ts">10:41:03</span><span class="lv">✓</span><span class="msg">Workspace synced · 1,284 files</span></div>
+          <div class="log-line show"><span class="ts">10:41:03</span><span class="lv" style="color:var(--txt-faint)">·</span><span class="msg" style="color:var(--txt-dim)">Waiting for pipeline trigger…</span></div>
+        </div>
+      </div>
+
+      <!-- Deployments -->
+      <div class="card">
+        <div class="hd">
+          <span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18M3 12h18M3 17h18"/></svg>Recent deployments</span>
+          <div class="r"><span class="tag">last 24h</span></div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>Environment</th><th>Commit</th><th>Status</th><th>By</th><th>When</th></tr>
+            </thead>
+            <tbody id="deployBody">
+              <tr class="deploy-row">
+                <td class="env">Production<small>edge-gateway</small></td>
+                <td><span class="hash">4c1f9ae</span></td>
+                <td><span class="badge2 b-live"><span class="sd"></span>Live</span></td>
+                <td class="who">akshit</td>
+                <td class="ago">just now</td>
+              </tr>
+              <tr class="deploy-row">
+                <td class="env">Staging<small>edge-gateway</small></td>
+                <td><span class="hash">b7e30d1</span></td>
+                <td><span class="badge2 b-ok"><span class="sd"></span>Superseded</span></td>
+                <td class="who">dan.k</td>
+                <td class="ago">26m ago</td>
+              </tr>
+              <tr class="deploy-row">
+                <td class="env">Production<small>edge-gateway</small></td>
+                <td><span class="hash">f19a6c4</span></td>
+                <td><span class="badge2 b-ok"><span class="sd"></span>Superseded</span></td>
+                <td class="who">akshit</td>
+                <td class="ago">1h ago</td>
+              </tr>
+              <tr class="deploy-row">
+                <td class="env">Preview<small>pr-482</small></td>
+                <td><span class="hash">9d02ffe</span></td>
+                <td><span class="badge2 b-build"><span class="sd"></span>Building</span></td>
+                <td class="who">mira.s</td>
+                <td class="ago">1h ago</td>
+              </tr>
+              <tr class="deploy-row">
+                <td class="env">Production<small>edge-gateway</small></td>
+                <td><span class="hash">3ac778b</span></td>
+                <td><span class="badge2 b-fail"><span class="sd"></span>Rolled back</span></td>
+                <td class="who">dan.k</td>
+                <td class="ago">3h ago</td>
+              </tr>
+              <tr class="deploy-row">
+                <td class="env">Staging<small>edge-gateway</small></td>
+                <td><span class="hash">c5501ea</span></td>
+                <td><span class="badge2 b-ok"><span class="sd"></span>Superseded</span></td>
+                <td class="who">akshit</td>
+                <td class="ago">5h ago</td>
+              </tr>
+              <tr class="deploy-row">
+                <td class="env">Production<small>edge-gateway</small></td>
+                <td><span class="hash">8be1204</span></td>
+                <td><span class="badge2 b-ok"><span class="sd"></span>Superseded</span></td>
+                <td class="who">mira.s</td>
+                <td class="ago">7h ago</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var runBtn = document.querySelector('.run');
+  var stages = Array.prototype.slice.call(document.querySelectorAll('.stage'));
+  var log = document.querySelector('.log');
+  var logStageTag = document.getElementById('logStage');
+  var deployBody = document.getElementById('deployBody');
+  var commitEl = document.getElementById('commitHash');
+
+  function pad(n){return n<10?'0'+n:''+n;}
+  function stamp(){var d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());}
+  var hexc='0123456789abcdef';
+  function shortHash(){var s='';for(var i=0;i<7;i++)s+=hexc[Math.floor(Math.random()*16)];return s;}
+  function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+  var cursorLine=null;
+  function addLine(level, html, withCursor){
+    if(cursorLine){var c=cursorLine.querySelector('.cursor'); if(c) c.remove(); cursorLine=null;}
+    var el=document.createElement('div');
+    el.className='log-line '+(level||'');
+    var mark = level==='ok'?'✓':level==='warn'?'!':level==='cmd'?'$':level==='info'?'›':'·';
+    el.innerHTML='<span class="ts">'+stamp()+'</span><span class="lv">'+mark+'</span><span class="msg">'+html+(withCursor?'<span class="cursor"></span>':'')+'</span>';
+    log.appendChild(el);
+    if(withCursor) cursorLine=el;
+    // trigger fade
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ el.classList.add('show'); }); });
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  function setStatus(stage, status){
+    stage.setAttribute('data-status', status);
+    var lbl = stage.querySelector('.status .lbl');
+    lbl.textContent = status.charAt(0).toUpperCase()+status.slice(1);
+  }
+  function setBar(stage, pct){
+    stage.querySelector('.bar').style.width = pct+'%';
+    stage.querySelector('.pct').textContent = Math.round(pct)+'%';
+  }
+
+  // scripted log content per stage
+  var scripts = {
+    build: [
+      ['cmd','docker build -t edge-gateway:4c1f9ae .'],
+      ['info','Step 3/9 · installing dependencies (pnpm)'],
+      ['ok','Resolved 214 packages · cache hit'],
+      ['info','Step 7/9 · compiling TypeScript → dist/'],
+      ['ok','Image built · 142 MB · digest sha256:9f2c…']
+    ],
+    test: [
+      ['cmd','pnpm vitest run --coverage'],
+      ['info','Spawning 4 workers · 412 tests'],
+      ['ok','gateway/router.spec.ts · 88 passed'],
+      ['warn','flaky retry test recovered on attempt 2'],
+      ['ok','412 passed · coverage 94.2% · 1m 09s']
+    ],
+    scan: [
+      ['cmd','trivy image --severity HIGH,CRITICAL edge-gateway'],
+      ['info','Scanning 142 MB image · SAST + deps'],
+      ['ok','0 critical · 0 high vulnerabilities'],
+      ['ok','License policy check passed']
+    ],
+    deploy: [
+      ['cmd','kubectl apply -f k8s/prod --record'],
+      ['info','Rolling update · 6/6 replicas'],
+      ['info','Waiting for health probes on :8080'],
+      ['ok','Traffic shifted 100% · release r-2048'],
+      ['ok','Deployment healthy · edge-gateway live']
+    ]
+  };
+  var order = ['build','test','scan','deploy'];
+
+  function stageByName(n){ for(var i=0;i<stages.length;i++){ if(stages[i].getAttribute('data-stage')===n) return stages[i]; } }
+
+  async function animateBar(stage, dur){
+    var start=performance.now();
+    return new Promise(function(resolve){
+      function frame(now){
+        var t=Math.min(1,(now-start)/dur);
+        var eased = 1-Math.pow(1-t,2);
+        setBar(stage, eased*100);
+        if(t<1) requestAnimationFrame(frame); else resolve();
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  async function runPipeline(){
+    runBtn.disabled = true;
+    // fresh commit
+    var hash = shortHash();
+    commitEl.textContent = hash;
+
+    // reset
+    stages.forEach(function(s){ setStatus(s,'queued'); setBar(s,0); });
+    addLine('info','Pipeline queued · commit <b style="color:#e7d9ff">'+hash+'</b> · 4 stages');
+    await sleep(400);
+
+    for(var i=0;i<order.length;i++){
+      var name=order[i];
+      var stage=stageByName(name);
+      var pretty=name.charAt(0).toUpperCase()+name.slice(1);
+      logStageTag.textContent = name;
+      setStatus(stage,'running');
+      addLine('info','── <b style="color:#fff">'+pretty+'</b> stage started ──');
+
+      var lines=scripts[name];
+      var barPromise=animateBar(stage, 1900);
+      for(var j=0;j<lines.length;j++){
+        addLine(lines[j][0], lines[j][1], true);
+        await sleep(300+Math.random()*230);
+      }
+      await barPromise;
+      setBar(stage,100);
+      setStatus(stage,'passed');
+      addLine('ok', pretty+' passed');
+      await sleep(260);
+    }
+
+    logStageTag.textContent='done';
+    if(cursorLine){var c=cursorLine.querySelector('.cursor'); if(c) c.remove();}
+    addLine('ok','Pipeline succeeded · deployed to <b style="color:#fff">production</b> in 2m 41s');
+
+    // demote current live row, insert new live deployment
+    var oldLive=deployBody.querySelector('.b-live');
+    if(oldLive){
+      oldLive.className='badge2 b-ok';
+      oldLive.innerHTML='<span class="sd"></span>Superseded';
+      var oldAgo=oldLive.closest('.deploy-row').querySelector('.ago');
+      if(oldAgo) oldAgo.textContent='moments ago';
+    }
+    var row=document.createElement('tr');
+    row.className='deploy-row fresh';
+    row.innerHTML='<td class="env">Production<small>edge-gateway</small></td>'+
+      '<td><span class="hash">'+hash+'</span></td>'+
+      '<td><span class="badge2 b-live"><span class="sd"></span>Live</span></td>'+
+      '<td class="who">akshit</td><td class="ago">just now</td>';
+    deployBody.insertBefore(row, deployBody.firstChild);
+
+    runBtn.disabled=false;
+  }
+
+  runBtn.addEventListener('click', function(){ if(!runBtn.disabled) runPipeline(); });
+})();
+</script>
+</body>
+</html>
