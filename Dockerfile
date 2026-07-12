@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
-    GIFSMITH_IN_CONTAINER=1
+    GIFSMITH_NO_SANDBOX=1
 
 # Install gifsmith globally so the `gifsmith` CLI is on PATH.
 RUN npm install -g gifsmith
