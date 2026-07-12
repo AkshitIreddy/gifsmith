@@ -1,0 +1,7 @@
+# Publish only dist + docs (see package.json "files"); this is a backstop.
+src/
+examples/
+.github/
+tsconfig.json
+*.tsbuildinfo
+.gifsmith/
