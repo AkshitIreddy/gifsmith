@@ -25,23 +25,36 @@ export interface CaptureHandle {
   stop(): Promise<void>;
 }
 
+// A steady stream of paints during otherwise-static holds, so the screencast
+// keeps emitting frames and their real timestamps time the hold accurately.
+// We use a CSS animation, NOT requestAnimationFrame: headless Chrome throttles
+// rAF for backgrounded/offscreen pages (and optimizes away sub-pixel changes),
+// so an rAF loop can fall silent on a static scene — a CSS animation that
+// mutates a *paint* property runs on the browser's own timeline and forces a
+// real commit every frame. The element is 2px, ~invisible (opacity 0.02),
+// parked in the top-left corner (exclude it with a camera clip if needed).
 const HEARTBEAT = `
 (() => {
-  if (window.__gifsmithHeartbeat) return;
+  if (document.getElementById('__gifsmith_heartbeat')) return;
+  const style = document.createElement('style');
+  style.id = '__gifsmith_heartbeat_style';
+  style.textContent =
+    '@keyframes __gifsmith_hb{0%{background:#000}50%{background:#0c0c0c}100%{background:#000}}' +
+    '#__gifsmith_heartbeat{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.02;' +
+    'pointer-events:none;z-index:2147483647;animation:__gifsmith_hb 0.1s linear infinite}';
+  document.head.appendChild(style);
   const d = document.createElement('div');
   d.id = '__gifsmith_heartbeat';
-  d.style.cssText =
-    'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.012;' +
-    'pointer-events:none;z-index:2147483647;background:#808080';
   document.documentElement.appendChild(d);
-  let t = 0;
-  const tick = () => {
-    t = (t + 1) % 1000;
-    // A sub-pixel transform forces a fresh composite/paint every frame.
-    d.style.transform = 'translateZ(0) translateX(' + (t % 2 ? 0.01 : 0) + 'px)';
-    window.__gifsmithHeartbeat = requestAnimationFrame(tick);
-  };
-  window.__gifsmithHeartbeat = requestAnimationFrame(tick);
+})();
+`;
+
+const HEARTBEAT_STOP = `
+(() => {
+  var d = document.getElementById('__gifsmith_heartbeat');
+  var s = document.getElementById('__gifsmith_heartbeat_style');
+  if (d) d.remove();
+  if (s) s.remove();
 })();
 `;
 
@@ -66,6 +79,8 @@ export async function startScreencast(
   const timestamps: number[] = [];
   let index = 0;
   let stopped = false;
+  let onFirstFrame: (() => void) | null = null;
+  const firstFrame = new Promise<void>((res) => { onFirstFrame = res; });
 
   client.on('Page.screencastFrame', async (evt: any) => {
     const { data, sessionId, metadata } = evt;
@@ -79,6 +94,7 @@ export async function startScreencast(
       fs.writeFileSync(file, Buffer.from(data, 'base64'));
       frames.push(file);
       timestamps.push(ts);
+      if (onFirstFrame) { onFirstFrame(); onFirstFrame = null; }
     } catch (e) {
       log.debug('frame write failed', e);
     }
@@ -90,14 +106,22 @@ export async function startScreencast(
     quality: opts.quality ?? 92,
     everyNthFrame: 1,
   });
-  log.step('capture', 'screencast started');
 
+  // A cold screencast can take up to ~1s to emit its first frame. Wait for the
+  // pipeline to actually be live before the timeline runs, so short captures
+  // aren't empty and pacing starts from real frames (not an empty warmup gap).
+  await Promise.race([firstFrame, new Promise<void>((r) => setTimeout(r, 4000))]);
+  log.step('capture', `screencast live (${frames.length ? 'primed' : 'no first frame yet'})`);
+
+  let didStop = false;
   const stop = async (): Promise<void> => {
+    if (didStop) return; // idempotent: the Director calls this on success and again in finally
+    didStop = true;
     stopped = true;
     try { await client.send('Page.stopScreencast'); } catch { /* ignore */ }
     // Give in-flight frame events a moment to flush.
     await new Promise((r) => setTimeout(r, 150));
-    try { await page.evaluate('window.__gifsmithHeartbeat && cancelAnimationFrame(window.__gifsmithHeartbeat)'); } catch { /* ignore */ }
+    try { await page.evaluate(HEARTBEAT_STOP); } catch { /* ignore */ }
     log.step('capture', `${frames.length} frames`);
   };
 
