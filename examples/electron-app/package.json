@@ -1,0 +1,14 @@
+{
+  "name": "gifsmith-electron-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A premium Electron app recorded end-to-end with gifsmith's electron() adapter",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "record": "node record.mjs"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}

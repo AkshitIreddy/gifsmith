@@ -1,0 +1,57 @@
+# Dogfood: gifsmith renders its own README demo on every change to the engine
+# or the example, and commits the refreshed docs/demo.{gif,webp}. This is the
+# vhs-action pattern — the hero GIF stays true to the current code.
+name: demo
+
+on:
+  push:
+    branches: [main, master]
+    paths: ['src/**', 'examples/**', '.github/workflows/demo.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Render the demo
+        env:
+          PUPPETEER_EXECUTABLE_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node examples/hello-web/demo.mjs
+          mkdir -p docs
+          cp examples/hello-web/out/demo.gif  docs/demo.gif
+          cp examples/hello-web/out/demo.webp docs/demo.webp
+
+      - name: Commit refreshed demo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/demo.gif docs/demo.webp
+          if git diff --staged --quiet; then
+            echo "demo unchanged"
+          else
+            git commit -m "chore(demo): regenerate README demo [skip ci]"
+            git push
+          fi

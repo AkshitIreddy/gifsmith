@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aurora — demo app</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: #e8ecf3; height: 100vh; overflow: hidden;
+    background:
+      radial-gradient(60% 55% at 20% 12%, #3b2d6b55, transparent 60%),
+      radial-gradient(55% 50% at 84% 22%, #1f6fb255, transparent 62%),
+      linear-gradient(160deg, #12162a, #0a0d18);
+  }
+  .app { height: 100%; display: flex; flex-direction: column; }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 18px 28px; border-bottom: 1px solid #ffffff12;
+  }
+  .logo { width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, #7c9cff, #c96ff0); box-shadow: 0 4px 14px #7c9cff55; }
+  header h1 { font-size: 17px; font-weight: 650; letter-spacing: .2px; }
+  header .sp { flex: 1; }
+  header .pill { font-size: 12px; color: #9fb0cc; border: 1px solid #ffffff18; border-radius: 999px; padding: 5px 12px; }
+
+  main { flex: 1; position: relative; overflow: hidden; }
+  .view { position: absolute; inset: 0; padding: 30px 40px;
+    opacity: 0; transform: translateY(10px); pointer-events: none;
+    transition: opacity .45s ease, transform .45s ease; }
+  .app[data-view="hero"]   .view.hero   { opacity: 1; transform: none; pointer-events: auto; }
+  .app[data-view="grid"]   .view.grid   { opacity: 1; transform: none; pointer-events: auto; }
+  .app[data-view="detail"] .view.detail { opacity: 1; transform: none; pointer-events: auto; }
+
+  /* hero */
+  .view.hero { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .view.hero h2 { font-size: 34px; font-weight: 700; margin-bottom: 10px;
+    background: linear-gradient(90deg, #cdd7ff, #f0c9ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .view.hero p { color: #9fb0cc; font-size: 15px; margin-bottom: 26px; max-width: 460px; }
+  .btn { border: 0; cursor: pointer; font: inherit; font-weight: 620;
+    color: #fff; background: linear-gradient(135deg, #6d8bff, #b96ff0);
+    padding: 13px 24px; border-radius: 12px; font-size: 15px;
+    box-shadow: 0 8px 24px #6d8bff44; transition: transform .15s ease, box-shadow .15s ease; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 30px #6d8bff66; }
+
+  /* grid */
+  .grid-wrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: #ffffff0a; border: 1px solid #ffffff14; border-radius: 16px; padding: 20px;
+    cursor: pointer; transition: transform .3s ease, opacity .3s ease, background .2s ease, border .2s ease;
+    opacity: 0; transform: translateY(14px); }
+  .app[data-view="grid"] .card { opacity: 1; transform: none; }
+  .card:nth-child(1){ transition-delay:.02s } .card:nth-child(2){ transition-delay:.08s }
+  .card:nth-child(3){ transition-delay:.14s } .card:nth-child(4){ transition-delay:.20s }
+  .card:nth-child(5){ transition-delay:.26s } .card:nth-child(6){ transition-delay:.32s }
+  .card:hover { background: #ffffff14; border-color: #7c9cff55; }
+  .card .ic { font-size: 26px; margin-bottom: 12px; }
+  .card h3 { font-size: 16px; margin-bottom: 6px; }
+  .card p { color: #9fb0cc; font-size: 13px; line-height: 1.5; }
+  .view.grid h2 { font-size: 22px; margin-bottom: 20px; font-weight: 650; }
+
+  /* detail */
+  .view.detail { padding: 0; }
+  .detail-head { display: flex; align-items: center; gap: 14px; padding: 22px 40px 16px; }
+  .back { background: #ffffff12; border: 1px solid #ffffff1e; color: #cdd7ff; cursor: pointer;
+    border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 13px; }
+  .detail-head h2 { font-size: 22px; font-weight: 700; }
+  .content { position: absolute; top: 74px; bottom: 0; left: 0; right: 0; overflow-y: auto; padding: 6px 40px 40px; }
+  .content h4 { margin: 22px 0 8px; font-size: 15px; color: #b9c6e6; }
+  .content p { color: #9fb0cc; font-size: 14px; line-height: 1.75; margin-bottom: 10px; max-width: 720px; }
+  .content .block { background: #ffffff08; border: 1px solid #ffffff12; border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
+  .content .stat { display: inline-block; background: #7c9cff1e; border: 1px solid #7c9cff40; color: #cdd7ff;
+    border-radius: 10px; padding: 8px 14px; margin: 4px 6px 0 0; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="app" data-view="hero" id="app">
+    <header>
+      <div class="logo"></div>
+      <h1>Aurora</h1>
+      <div class="sp"></div>
+      <span class="pill">Daily briefing</span>
+    </header>
+    <main>
+      <section class="view hero">
+        <h2>Your morning, distilled.</h2>
+        <p>Aurora reads your inbox and the web overnight and hands you a calm, structured briefing.</p>
+        <button class="btn generate" id="generate">✨ Generate briefing</button>
+      </section>
+
+      <section class="view grid">
+        <h2>Today’s briefing</h2>
+        <div class="grid-wrap" id="grid"></div>
+      </section>
+
+      <section class="view detail">
+        <div class="detail-head">
+          <button class="back" id="back">← Back</button>
+          <h2 id="detailTitle">Topic</h2>
+        </div>
+        <div class="content" id="content"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const app = document.getElementById('app');
+    const cards = [
+      { ic: '🤖', title: 'AI model releases', blurb: 'Three notable launches and what changed.' },
+      { ic: '📈', title: 'Markets rally', blurb: 'Indices up; a quiet week for volatility.' },
+      { ic: '🚀', title: 'Starship update', blurb: 'Static fire complete; window opens soon.' },
+      { ic: '🔬', title: 'Research roundup', blurb: 'A fast retrieval trick worth reading.' },
+      { ic: '🌍', title: 'Climate & energy', blurb: 'Grid storage costs fell again this quarter.' },
+      { ic: '🎨', title: 'Design & tools', blurb: 'A new open font and a tiny CLI you’ll like.' },
+    ];
+    const grid = document.getElementById('grid');
+    grid.innerHTML = cards.map((c, i) => (
+      '<div class="card" data-i="' + i + '"><div class="ic">' + c.ic + '</div>' +
+      '<h3>' + c.title + '</h3><p>' + c.blurb + '</p></div>'
+    )).join('');
+
+    const longText =
+      '<div class="block"><p>This is a synthesized overview drawn from several sources. It explains ' +
+      'the development and why it matters, in a few calm sentences meant to be read, not skimmed.</p>' +
+      '<span class="stat">Funding $40M</span><span class="stat">Users 2.1M</span><span class="stat">Launch Aug 2026</span></div>';
+    function detailHtml(c) {
+      let s = '<div class="block"><p>' + c.blurb + ' ' + 'It expands here into a fuller explanation with the ' +
+        'context you need before your first meeting.</p></div>' + longText;
+      for (let k = 0; k < 4; k++) {
+        s += '<h4>Section ' + (k + 1) + '</h4><p>Additional detail so the panel scrolls: background, ' +
+          'reactions, and a couple of links worth opening later. Kept deliberately unhurried.</p>';
+      }
+      return s;
+    }
+
+    document.getElementById('generate').addEventListener('click', () => { app.dataset.view = 'grid'; });
+    grid.addEventListener('click', (e) => {
+      const card = e.target.closest('.card'); if (!card) return;
+      const c = cards[Number(card.dataset.i)];
+      document.getElementById('detailTitle').textContent = c.title;
+      document.getElementById('content').innerHTML = detailHtml(c);
+      document.getElementById('content').scrollTop = 0;
+      app.dataset.view = 'detail';
+    });
+    // Back returns all the way to the empty hero, so a scripted loop lands where
+    // it started (a clean anchor seam).
+    document.getElementById('back').addEventListener('click', () => { app.dataset.view = 'hero'; });
+  </script>
+</body>
+</html>

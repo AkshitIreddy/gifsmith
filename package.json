@@ -1,0 +1,73 @@
+{
+  "name": "gifsmith",
+  "version": "0.1.0",
+  "description": "A movie-set framework for browser/app demo GIFs — script a walkthrough of any web or webview UI and get a tiny, smooth, seamless looping README GIF/WebP. Like vhs, but for GUI apps.",
+  "keywords": [
+    "demo",
+    "gif",
+    "webp",
+    "loop",
+    "seamless-loop",
+    "screencast",
+    "readme",
+    "walkthrough",
+    "puppeteer",
+    "browser-demo",
+    "app-demo",
+    "record",
+    "cdp"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "author": "Akshit Ireddy",
+  "homepage": "https://github.com/AkshitIreddy/gifsmith",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AkshitIreddy/gifsmith.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AkshitIreddy/gifsmith/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./props": {
+      "types": "./dist/props/index.d.ts",
+      "import": "./dist/props/index.js"
+    }
+  },
+  "bin": {
+    "gifsmith": "./dist/cli.js",
+    "gifsmith-mcp": "./dist/mcp/server.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepublishOnly": "npm run clean && npm run build",
+    "example": "npm run build && node examples/hello-web/demo.mjs",
+    "demo:readme": "npm run build && node examples/hello-web/demo.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.0.0"
+  },
+  "optionalDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

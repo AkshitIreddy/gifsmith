@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Halo — Ship trust into every release</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#07080c;
+    --panel:rgba(255,255,255,.03);
+    --panel-2:rgba(255,255,255,.05);
+    --hair:rgba(255,255,255,.08);
+    --hair-soft:rgba(255,255,255,.06);
+    --hair-strong:rgba(255,255,255,.12);
+    --ink:#f4f6fb;
+    --ink-2:#aeb4c6;
+    --ink-3:#767d92;
+    --a1:#7c8bff;
+    --a2:#c46bff;
+    --a3:#43e6c8;
+    --accent-grad:linear-gradient(120deg,#8b9bff 0%,#c46bff 52%,#43e6c8 120%);
+    --radius:16px;
+    --radius-sm:12px;
+    --shadow:0 24px 60px -18px rgba(0,0,0,.72);
+    --font:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  }
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+    line-height:1.5;
+  }
+  .app{
+    position:relative;
+    width:100%;
+    min-height:100vh;
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 40px;
+    display:flex;
+    flex-direction:column;
+    isolation:isolate;
+  }
+
+  /* ambient hero glow */
+  .ambient{
+    position:fixed;
+    inset:-30% -10% auto -10%;
+    height:820px;
+    z-index:0;
+    pointer-events:none;
+    background:
+      radial-gradient(48% 60% at 22% 18%, rgba(124,139,255,.28), transparent 62%),
+      radial-gradient(46% 58% at 78% 8%, rgba(196,107,255,.22), transparent 60%),
+      radial-gradient(40% 52% at 60% 40%, rgba(67,230,200,.14), transparent 66%);
+    filter:blur(14px);
+    opacity:.9;
+    animation:shimmer 16s ease-in-out infinite alternate;
+  }
+  @keyframes shimmer{
+    0%{transform:translate3d(-2%,-1%,0) scale(1);opacity:.72}
+    50%{transform:translate3d(3%,2%,0) scale(1.06);opacity:1}
+    100%{transform:translate3d(-1%,1%,0) scale(1.02);opacity:.8}
+  }
+  .grid-fade{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+    background-size:64px 64px;
+    mask:radial-gradient(80% 55% at 50% 0%,#000,transparent 78%);
+    -webkit-mask:radial-gradient(80% 55% at 50% 0%,#000,transparent 78%);
+  }
+
+  /* ---------- NAV ---------- */
+  nav{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;justify-content:space-between;
+    height:64px;
+    margin:0 -40px;
+    padding:0 40px;
+    background:linear-gradient(180deg,rgba(7,8,12,.86),rgba(7,8,12,.44));
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--hair-soft);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.02em;font-size:17px}
+  .mark{
+    width:26px;height:26px;border-radius:8px;position:relative;
+    background:var(--accent-grad);
+    box-shadow:0 0 0 1px rgba(255,255,255,.14) inset,0 8px 22px -8px rgba(124,139,255,.8);
+    display:grid;place-items:center;
+  }
+  .mark::after{content:"";width:11px;height:11px;border-radius:50%;background:#07080c;box-shadow:0 0 0 3px rgba(255,255,255,.9) inset}
+  .nav-links{display:flex;gap:6px;align-items:center}
+  .nav-links a{
+    color:var(--ink-2);text-decoration:none;font-size:14px;font-weight:500;
+    padding:8px 12px;border-radius:9px;transition:color .18s ease,background .18s ease;
+  }
+  .nav-links a:hover{color:var(--ink);background:var(--panel-2)}
+  .nav-right{display:flex;align-items:center;gap:14px}
+  .nav-right .signin{color:var(--ink-2);text-decoration:none;font-size:14px;font-weight:500;transition:color .18s}
+  .nav-right .signin:hover{color:var(--ink)}
+  .btn{
+    font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;
+    border:0;border-radius:10px;padding:9px 16px;color:#0a0b10;
+    background:var(--accent-grad);letter-spacing:-.01em;
+    box-shadow:0 8px 24px -10px rgba(140,120,255,.8),0 0 0 1px rgba(255,255,255,.16) inset;
+    transition:transform .16s ease,box-shadow .16s ease,filter .16s ease;
+  }
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.06);box-shadow:0 14px 30px -10px rgba(140,120,255,.9),0 0 0 1px rgba(255,255,255,.24) inset}
+  .btn:active{transform:translateY(0)}
+
+  /* ---------- HERO ---------- */
+  main{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;gap:26px;padding:30px 0 20px}
+  .hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:44px;align-items:center}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:12.5px;font-weight:600;color:var(--ink-2);letter-spacing:.01em;
+    padding:6px 12px 6px 8px;border-radius:999px;
+    background:var(--panel);border:1px solid var(--hair);width:max-content;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--a3);box-shadow:0 0 0 4px rgba(67,230,200,.16)}
+  .eyebrow b{color:var(--ink);font-weight:600}
+  h1{
+    font-size:52px;line-height:1.03;letter-spacing:-.033em;font-weight:700;margin-top:18px;
+    max-width:12ch;
+  }
+  h1 .grad{
+    background:var(--accent-grad);-webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{margin-top:18px;font-size:16.5px;line-height:1.62;color:var(--ink-2);max-width:44ch}
+  .hero-actions{display:flex;align-items:center;gap:14px;margin-top:26px}
+  .btn-lg{padding:13px 22px;font-size:15px;border-radius:12px}
+  .btn-ghost{
+    background:var(--panel-2);color:var(--ink);border:1px solid var(--hair-strong);
+    box-shadow:none;display:inline-flex;align-items:center;gap:9px;
+  }
+  .btn-ghost:hover{background:rgba(255,255,255,.08);filter:none}
+  .btn-ghost svg{width:15px;height:15px}
+  .trust{margin-top:26px;display:flex;align-items:center;gap:18px;color:var(--ink-3);font-size:12.5px;font-weight:500}
+  .avatars{display:flex}
+  .avatars span{
+    width:26px;height:26px;border-radius:50%;margin-left:-8px;border:2px solid var(--bg);
+    background:linear-gradient(135deg,#6d7bff,#c46bff);
+  }
+  .avatars span:nth-child(2){background:linear-gradient(135deg,#43e6c8,#6d7bff)}
+  .avatars span:nth-child(3){background:linear-gradient(135deg,#c46bff,#ff8fb0)}
+  .avatars span:nth-child(4){background:linear-gradient(135deg,#ffd166,#43e6c8)}
+  .trust b{color:var(--ink-2);font-weight:600}
+
+  /* glass product mock */
+  .glass-wrap{position:relative;height:340px;animation:float 7s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+  .glass{
+    position:absolute;inset:0;border-radius:20px;overflow:hidden;
+    background:linear-gradient(160deg,rgba(30,33,48,.72),rgba(14,16,26,.66));
+    border:1px solid var(--hair-strong);
+    box-shadow:var(--shadow),0 0 0 1px rgba(255,255,255,.04) inset;
+    backdrop-filter:blur(6px);
+  }
+  .glass::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(60% 40% at 78% -6%,rgba(196,107,255,.22),transparent 60%),
+               radial-gradient(50% 40% at 8% 6%,rgba(124,139,255,.18),transparent 60%);
+  }
+  .g-top{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--hair-soft)}
+  .g-top .tl{display:flex;gap:6px}
+  .g-top .tl i{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.18)}
+  .g-top .tl i:first-child{background:#ff6b6b88}.g-top .tl i:nth-child(2){background:#ffd16688}.g-top .tl i:nth-child(3){background:#43e6c888}
+  .g-pill{margin-left:auto;font-size:11px;color:var(--ink-3);background:var(--panel);border:1px solid var(--hair);padding:4px 10px;border-radius:999px}
+  .g-body{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .g-card{background:var(--panel);border:1px solid var(--hair-soft);border-radius:12px;padding:13px}
+  .g-card.wide{grid-column:1/-1}
+  .g-label{font-size:11px;color:var(--ink-3);font-weight:600;letter-spacing:.02em;text-transform:uppercase}
+  .g-metric{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-top:4px}
+  .g-metric small{font-size:12px;color:var(--a3);font-weight:600;margin-left:6px}
+  .g-metric.p2 small{color:#ff9bb2}
+  .spark{display:flex;align-items:flex-end;gap:4px;height:44px;margin-top:12px}
+  .spark span{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(180deg,var(--a1),rgba(124,139,255,.15));animation:rise 2.6s ease-in-out infinite}
+  .spark span:nth-child(even){background:linear-gradient(180deg,var(--a2),rgba(196,107,255,.12))}
+  @keyframes rise{0%,100%{transform:scaleY(.72);opacity:.75}50%{transform:scaleY(1);opacity:1}}
+  .g-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:1px solid var(--hair-soft);font-size:12.5px}
+  .g-row:first-of-type{border-top:0}
+  .g-row .name{color:var(--ink-2);display:flex;align-items:center;gap:9px}
+  .g-row .name b{width:8px;height:8px;border-radius:50%;background:var(--a3)}
+  .g-row .name b.y{background:#ffd166}
+  .g-status{font-size:11px;font-weight:600;color:var(--a3);background:rgba(67,230,200,.1);border:1px solid rgba(67,230,200,.22);padding:3px 9px;border-radius:999px}
+  .g-status.warn{color:#ffd166;background:rgba(255,209,102,.1);border-color:rgba(255,209,102,.22)}
+
+  /* ---------- FEATURES ---------- */
+  .features{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .feature{
+    background:var(--panel);border:1px solid var(--hair-soft);border-radius:var(--radius);padding:20px;
+    transition:transform .2s ease,border-color .2s ease,background .2s ease;
+  }
+  .feature:hover{transform:translateY(-3px);border-color:var(--hair-strong);background:var(--panel-2)}
+  .f-ico{
+    width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+    background:linear-gradient(160deg,rgba(124,139,255,.2),rgba(196,107,255,.12));
+    border:1px solid var(--hair);color:var(--ink);
+  }
+  .f-ico svg{width:20px;height:20px}
+  .feature h3{font-size:15.5px;font-weight:650;letter-spacing:-.015em;margin-top:14px}
+  .feature p{font-size:13.5px;color:var(--ink-2);line-height:1.55;margin-top:7px}
+
+  /* ---------- PRICING ---------- */
+  .pricing{padding-top:4px}
+  .pricing-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px}
+  .pricing-head .pt{font-size:24px;font-weight:700;letter-spacing:-.025em}
+  .pricing-head .ps{font-size:13.5px;color:var(--ink-2);margin-top:5px}
+  .billing-toggle{
+    display:inline-flex;align-items:center;gap:2px;padding:4px;border-radius:12px;
+    background:var(--panel);border:1px solid var(--hair);cursor:pointer;user-select:none;position:relative;
+  }
+  .billing-toggle button{
+    font-family:inherit;border:0;background:transparent;cursor:pointer;position:relative;z-index:1;
+    color:var(--ink-3);font-size:13px;font-weight:600;padding:8px 16px;border-radius:9px;transition:color .2s ease;
+  }
+  .billing-toggle button.on{color:#0a0b10}
+  .billing-toggle .thumb{
+    position:absolute;z-index:0;top:4px;left:4px;height:calc(100% - 8px);border-radius:9px;
+    background:var(--accent-grad);box-shadow:0 6px 16px -6px rgba(140,120,255,.7);
+    transition:transform .32s cubic-bezier(.4,1.3,.5,1),width .32s cubic-bezier(.4,1.3,.5,1);
+  }
+  .save-badge{font-size:11px;font-weight:700;color:var(--a3);margin-left:8px;letter-spacing:.01em}
+  .plans{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .plan{
+    position:relative;background:var(--panel);border:1px solid var(--hair-soft);border-radius:var(--radius);
+    padding:22px;display:flex;flex-direction:column;
+    transition:transform .2s ease,border-color .2s ease;
+  }
+  .plan:hover{transform:translateY(-3px);border-color:var(--hair-strong)}
+  .plan.featured{
+    background:linear-gradient(180deg,rgba(124,139,255,.1),rgba(196,107,255,.05)),var(--panel);
+    border-color:rgba(140,140,255,.35);
+    box-shadow:0 24px 60px -26px rgba(124,139,255,.55),0 0 0 1px rgba(140,140,255,.12) inset;
+  }
+  .plan .tier{font-size:14px;font-weight:650;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .badge-pop{
+    font-size:10.5px;font-weight:700;color:#0a0b10;background:var(--accent-grad);
+    padding:3px 9px;border-radius:999px;letter-spacing:.02em;text-transform:uppercase;
+  }
+  .plan .desc{font-size:12.5px;color:var(--ink-3);margin-top:6px;min-height:32px;line-height:1.45}
+  .price-line{display:flex;align-items:baseline;gap:4px;margin-top:14px}
+  .cur{font-size:20px;font-weight:600;color:var(--ink-2);align-self:flex-start;margin-top:6px}
+  .price{font-size:40px;font-weight:750;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1;transition:opacity .18s ease,transform .18s ease}
+  .price.flip{opacity:0;transform:translateY(-6px)}
+  .per{font-size:13px;color:var(--ink-3);font-weight:500}
+  .bill-note{font-size:11.5px;color:var(--ink-3);margin-top:6px;height:15px}
+  .plan .buy{margin-top:16px;width:100%;text-align:center}
+  .plan .buy.ghost{background:var(--panel-2);color:var(--ink);border:1px solid var(--hair-strong);box-shadow:none}
+  .plan .buy.ghost:hover{background:rgba(255,255,255,.08);filter:none}
+  .feats{list-style:none;margin-top:16px;display:flex;flex-direction:column;gap:9px}
+  .feats li{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;color:var(--ink-2);line-height:1.4}
+  .feats svg{width:15px;height:15px;flex:none;margin-top:1px;color:var(--a3)}
+  .featured .feats svg{color:var(--a1)}
+
+  @media (max-width:1080px){
+    .hero{grid-template-columns:1fr;gap:24px}
+    .glass-wrap{display:none}
+    h1{font-size:44px}
+  }
+</style>
+</head>
+<body>
+<div class="ambient" aria-hidden="true"></div>
+<div class="grid-fade" aria-hidden="true"></div>
+
+<div class="app">
+  <nav>
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      Halo
+    </div>
+    <div class="nav-links">
+      <a href="#product">Product</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#docs">Docs</a>
+      <a href="#customers">Customers</a>
+    </div>
+    <div class="nav-right">
+      <a href="#signin" class="signin">Sign in</a>
+      <button class="btn">Get started</button>
+    </div>
+  </nav>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero" id="product">
+      <div class="hero-copy">
+        <span class="eyebrow"><span class="dot"></span> Now with <b>AI release scoring</b> · v3.2</span>
+        <h1>Ship every release with <span class="grad">total confidence</span>.</h1>
+        <p class="sub">Halo watches your deploys, catches regressions before your users do, and turns raw telemetry into a single trust score your whole team can read at a glance.</p>
+        <div class="hero-actions">
+          <button class="btn btn-lg cta">Start free trial</button>
+          <button class="btn btn-lg btn-ghost">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/></svg>
+            Watch demo
+          </button>
+        </div>
+        <div class="trust">
+          <div class="avatars"><span></span><span></span><span></span><span></span></div>
+          <span>Trusted by <b>2,400+ engineering teams</b> shipping daily</span>
+        </div>
+      </div>
+
+      <!-- glass mock -->
+      <div class="glass-wrap" aria-hidden="true">
+        <div class="glass">
+          <div class="g-top">
+            <div class="tl"><i></i><i></i><i></i></div>
+            <span class="g-pill">Release · main → prod</span>
+          </div>
+          <div class="g-body">
+            <div class="g-card">
+              <div class="g-label">Trust score</div>
+              <div class="g-metric">98.6<small>▲ 2.1</small></div>
+            </div>
+            <div class="g-card">
+              <div class="g-label">Error budget</div>
+              <div class="g-metric p2">72%<small>▼ 4</small></div>
+            </div>
+            <div class="g-card wide">
+              <div class="g-label">Latency · p95 (24h)</div>
+              <div class="spark">
+                <span style="animation-delay:0s"></span><span style="animation-delay:.2s"></span>
+                <span style="animation-delay:.4s"></span><span style="animation-delay:.6s"></span>
+                <span style="animation-delay:.8s"></span><span style="animation-delay:1s"></span>
+                <span style="animation-delay:1.2s"></span><span style="animation-delay:1.4s"></span>
+                <span style="animation-delay:1.6s"></span><span style="animation-delay:1.8s"></span>
+                <span style="animation-delay:2s"></span><span style="animation-delay:2.2s"></span>
+              </div>
+            </div>
+            <div class="g-card wide" style="padding-top:6px">
+              <div class="g-row"><span class="name"><b></b> checkout-api</span><span class="g-status">Healthy</span></div>
+              <div class="g-row"><span class="name"><b class="y"></b> billing-worker</span><span class="g-status warn">Watch</span></div>
+              <div class="g-row"><span class="name"><b></b> auth-gateway</span><span class="g-status">Healthy</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="features" id="features">
+      <div class="feature">
+        <div class="f-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+        </div>
+        <h3>Regression radar</h3>
+        <p>Every deploy is diffed against a live baseline. Halo flags the exact commit and metric that moved before it reaches your users.</p>
+      </div>
+      <div class="feature">
+        <div class="f-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+        </div>
+        <h3>One trust score</h3>
+        <p>Latency, errors, saturation, and user signals fold into a single number your on-call, PM, and CEO all understand instantly.</p>
+      </div>
+      <div class="feature">
+        <div class="f-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
+        </div>
+        <h3>Auto-rollback</h3>
+        <p>Set a threshold once. When a release dips below it, Halo rolls back in seconds and posts the postmortem to your channel.</p>
+      </div>
+    </section>
+
+    <!-- PRICING -->
+    <section class="pricing" id="pricing">
+      <div class="pricing-head">
+        <div>
+          <div class="pt">Simple pricing that scales with you</div>
+          <div class="ps">Start free for 14 days. No card required. Cancel anytime.</div>
+        </div>
+        <div class="billing-toggle" role="group" aria-label="Billing period">
+          <span class="thumb"></span>
+          <button data-cycle="monthly" class="on">Monthly</button>
+          <button data-cycle="annual">Annual<span class="save-badge">−20%</span></button>
+        </div>
+      </div>
+
+      <div class="plans">
+        <!-- Starter -->
+        <div class="plan">
+          <div class="tier">Starter</div>
+          <div class="desc">For small teams putting their first service into production.</div>
+          <div class="price-line">
+            <span class="cur">$</span>
+            <span class="price" data-monthly="19" data-annual="15">19</span>
+            <span class="per">/ mo</span>
+          </div>
+          <div class="bill-note" data-note>Billed monthly per workspace</div>
+          <button class="btn buy ghost">Start free trial</button>
+          <ul class="feats">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Up to 5 services</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>7-day metric history</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Slack + email alerts</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Community support</li>
+          </ul>
+        </div>
+
+        <!-- Pro (featured) -->
+        <div class="plan featured">
+          <div class="tier">Pro <span class="badge-pop">Most popular</span></div>
+          <div class="desc">For scaling teams that ship multiple times a day and need auto-rollback.</div>
+          <div class="price-line">
+            <span class="cur">$</span>
+            <span class="price" data-monthly="49" data-annual="39">49</span>
+            <span class="per">/ mo</span>
+          </div>
+          <div class="bill-note" data-note>Billed monthly per workspace</div>
+          <button class="btn buy">Start free trial</button>
+          <ul class="feats">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Unlimited services</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>90-day history + trends</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Auto-rollback + AI scoring</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Priority support · 4h SLA</li>
+          </ul>
+        </div>
+
+        <!-- Scale -->
+        <div class="plan">
+          <div class="tier">Scale</div>
+          <div class="desc">For platform teams with compliance, SSO, and audit requirements.</div>
+          <div class="price-line">
+            <span class="cur">$</span>
+            <span class="price" data-monthly="99" data-annual="79">99</span>
+            <span class="per">/ mo</span>
+          </div>
+          <div class="bill-note" data-note>Billed monthly per workspace</div>
+          <button class="btn buy ghost">Contact sales</button>
+          <ul class="feats">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Everything in Pro</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>SSO, SCIM + audit logs</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Custom SLOs + dashboards</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>Dedicated success engineer</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var toggle = document.querySelector('.billing-toggle');
+  var buttons = toggle.querySelectorAll('button');
+  var thumb = toggle.querySelector('.thumb');
+  var prices = document.querySelectorAll('.price');
+  var notes = document.querySelectorAll('[data-note]');
+  var cycle = 'monthly';
+
+  function positionThumb(){
+    var active = toggle.querySelector('button.on');
+    thumb.style.width = active.offsetWidth + 'px';
+    thumb.style.transform = 'translateX(' + (active.offsetLeft - 4) + 'px)';
+  }
+
+  function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
+
+  function tween(el, from, to){
+    var start = null, dur = 480;
+    el.classList.remove('flip');
+    function step(ts){
+      if(start === null) start = ts;
+      var p = Math.min((ts - start) / dur, 1);
+      var val = Math.round(from + (to - from) * easeOutCubic(p));
+      el.textContent = val;
+      if(p < 1) requestAnimationFrame(step);
+      else el.textContent = to;
+    }
+    requestAnimationFrame(step);
+  }
+
+  function setCycle(next){
+    if(next === cycle) return;
+    cycle = next;
+    buttons.forEach(function(b){ b.classList.toggle('on', b.dataset.cycle === cycle); });
+    positionThumb();
+    prices.forEach(function(el){
+      var from = parseInt(el.textContent, 10);
+      var to = parseInt(cycle === 'annual' ? el.dataset.annual : el.dataset.monthly, 10);
+      el.classList.add('flip');
+      setTimeout(function(){ tween(el, from, to); }, 120);
+    });
+    notes.forEach(function(n){
+      n.textContent = cycle === 'annual' ? 'Billed annually · 2 months free' : 'Billed monthly per workspace';
+    });
+  }
+
+  buttons.forEach(function(b){
+    b.addEventListener('click', function(){ setCycle(b.dataset.cycle); });
+  });
+
+  window.addEventListener('load', positionThumb);
+  positionThumb();
+
+  document.querySelector('.cta').addEventListener('click', function(){
+    document.getElementById('pricing').scrollIntoView({behavior:'smooth', block:'start'});
+  });
+})();
+</script>
+</body>
+</html>
