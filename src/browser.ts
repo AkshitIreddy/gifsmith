@@ -101,7 +101,10 @@ export async function connect(
     '--disable-renderer-backgrounding',
     '--mute-audio',
   ];
-  if (target.chromiumSandbox === false) {
+  // Disable Chromium's OS sandbox when asked, or via GIFSMITH_NO_SANDBOX — the
+  // convenient toggle for containers/CI (where Chrome runs as root and won't
+  // start otherwise) without changing any demo code.
+  if (target.chromiumSandbox === false || process.env.GIFSMITH_NO_SANDBOX) {
     args.push('--no-sandbox', '--disable-setuid-sandbox');
   }
   if (target.headful && target.offscreen !== false) {

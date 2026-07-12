@@ -184,9 +184,10 @@ export interface BrowserTarget {
   /**
    * Chromium's OS-level sandbox. Default true. Set false ONLY inside a
    * container / CI / when running as root, where the sandbox can't initialize
-   * (adds --no-sandbox --disable-setuid-sandbox). gifsmith always renders in a
-   * throwaway, isolated browser profile regardless — this flag is unrelated to
-   * that isolation; it only concerns Chromium's own process sandbox.
+   * (adds --no-sandbox --disable-setuid-sandbox). The env var GIFSMITH_NO_SANDBOX=1
+   * does the same without touching code. gifsmith always renders in a throwaway,
+   * isolated browser profile regardless — this flag is unrelated to that
+   * isolation; it only concerns Chromium's own process sandbox.
    */
   chromiumSandbox?: boolean;
   /**
