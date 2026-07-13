@@ -73,6 +73,12 @@ export const RUNTIME_JS = String.raw`
     cursorTo: function (x, y, durMs, easing) {
       if (!G.cursor) return Promise.resolve();
       const c = G.cursor, sx = c.x, sy = c.y;
+      if (!durMs || durMs <= 0) {
+        // auto: ~900px/s with a floor and ceiling, so glides read naturally
+        // at any distance instead of teleporting across long travels
+        const dist = Math.hypot(x - sx, y - sy);
+        durMs = Math.max(340, Math.min(1150, dist * 1.1));
+      }
       return tween(durMs, easing, function (p) {
         c.x = sx + (x - sx) * p;
         c.y = sy + (y - sy) * p;

@@ -88,7 +88,7 @@ async function runStep(page: Page, step: Step, tl: CompiledTimeline, ctx: PlayCo
 
     case 'click':
       if (step.via === 'cursor') {
-        await cursorToSelector(page, appFrame, step.selector, 500, 'easeInOut');
+        await cursorToSelector(page, appFrame, step.selector, step.glideMs ?? 0, 'easeInOut');
         await page.evaluate(() => (window as any).__gifsmith?.ripple());
       }
       try {

@@ -55,9 +55,15 @@ export class TimelineBuilder {
     });
   }
 
-  /** Click a selector. `via:'cursor'` moves the synthetic cursor there first. */
-  click(selector: string, opts: { via?: 'cursor' | 'direct' } = {}): this {
-    return this.push({ kind: 'click', selector, via: opts.via ?? 'cursor' });
+  /** Click a selector. `via:'cursor'` moves the synthetic cursor there first
+   * (glide duration is distance-aware by default; set `glideSeconds` to pin it). */
+  click(selector: string, opts: { via?: 'cursor' | 'direct'; glideSeconds?: number } = {}): this {
+    return this.push({
+      kind: 'click',
+      selector,
+      via: opts.via ?? 'cursor',
+      glideMs: opts.glideSeconds != null ? Math.round(opts.glideSeconds * 1000) : 0,
+    });
   }
 
   /** Type text into a field, one key at a time. */

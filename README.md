@@ -114,7 +114,7 @@ props: [
 ]
 ```
 
-Props composite with the *live* app in the same paint (back-layer props behind, front-layer on top). The synthetic **cursor** is driven by `cursorTo` / `click(via:'cursor')` and glides with real easing.
+Props composite with the *live* app in the same paint (back-layer props behind, front-layer on top). The synthetic **cursor** is driven by `cursorTo` / `click(via:'cursor')` and glides with real easing; click glides are **distance-aware** by default (~900px/s, clamped), so long travels stay watchable instead of teleporting — pin an exact time with `click(sel, { glideSeconds })`.
 
 The **taskbar** renders a convincing populated desktop, not placeholders: original SVG app-icon glyphs (start, search, folder, globe browser, code editor, terminal, mail) plus, on Windows, a system tray — chevron, wifi, speaker, battery — beside the clock. `taskbar({ clock: '10:24', date: '7/13/2026' })` pins the time; the mac dock reuses the same icon set.
 

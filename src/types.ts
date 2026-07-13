@@ -110,7 +110,7 @@ export type Easing =
 export type Step =
   | { kind: 'hold'; ms: number }
   | { kind: 'waitFor'; selector?: string; predicate?: string; timeoutMs: number }
-  | { kind: 'click'; selector: string; via: 'cursor' | 'direct' }
+  | { kind: 'click'; selector: string; via: 'cursor' | 'direct'; glideMs?: number }
   | { kind: 'type'; selector: string; text: string; delayMs: number }
   | { kind: 'scroll'; selector: string; dy: number; durationMs: number; easing: Easing }
   | { kind: 'cursorTo'; selector?: string; point?: Point; durationMs: number; easing: Easing }
