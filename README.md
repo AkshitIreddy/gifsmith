@@ -116,6 +116,8 @@ props: [
 
 Props composite with the *live* app in the same paint (back-layer props behind, front-layer on top). The synthetic **cursor** is driven by `cursorTo` / `click(via:'cursor')` and glides with real easing.
 
+The **taskbar** renders a convincing populated desktop, not placeholders: original SVG app-icon glyphs (start, search, folder, globe browser, code editor, terminal, mail) plus, on Windows, a system tray — chevron, wifi, speaker, battery — beside the clock. `taskbar({ clock: '10:24', date: '7/13/2026' })` pins the time; the mac dock reuses the same icon set.
+
 ## Built for AI authors
 
 Every build-time helper returns structured data — an agent can build and self-correct without watching a video:
@@ -180,6 +182,8 @@ The [Cadence/Electron example](examples/electron-app/) is a complete, runnable a
 await render({ target: web('http://localhost:5173'), out: 'demo.gif',
   compose: 'stage', stage: { title: 'My App', os: 'mac' }, timeline: tl });
 ```
+
+The stage reserves space under the window (`stage.bottomInset`, default 72px windows / 84px mac) so a `taskbar()`/dock prop never overlaps the app and a strip of desktop stays visible between them — a window sitting flush on the taskbar reads as a bug, not a desktop. Set `bottomInset: 0` to restore the old edge-to-edge layout.
 
 ## Sandbox & isolation
 
