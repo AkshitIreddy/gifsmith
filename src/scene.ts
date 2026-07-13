@@ -104,11 +104,15 @@ async function composeStage(page: Page, args: ComposeArgs): Promise<Composition>
 function buildStageHtml(url: string, viewport: { width: number; height: number }, stage: StageOptions): string {
   const pad = stage.padding ?? 44;
   const os = stage.os ?? 'mac';
+  // Reserve room under the window for the taskbar/dock prop (56/64px tall)
+  // plus a strip of visible desktop — a window touching the taskbar reads
+  // as a rendering bug, not a desktop.
+  const bottom = stage.bottomInset ?? (os === 'windows' ? 72 : 84);
   const hue = ((stage.hue ?? 222) % 360 + 360) % 360;
   const h2 = (hue + 28) % 360;
   const titleH = 40;
   const winW = Math.max(320, viewport.width - 2 * pad);
-  const winH = Math.max(240, viewport.height - 2 * pad);
+  const winH = Math.max(240, viewport.height - pad - Math.max(bottom, pad));
   const frameH = winH - titleH;
 
   const controls =

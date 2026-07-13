@@ -84,6 +84,10 @@ export interface StageOptions {
   hue?: number;
   /** Desktop margin around the window in px (how much wallpaper shows). */
   padding?: number;
+  /** Extra space reserved below the window, so a taskbar()/dock prop never
+   * overlaps it and some desktop stays visible in between. Defaults to 72
+   * (windows) / 84 (mac) — set 0 to restore the old edge-to-edge layout. */
+  bottomInset?: number;
   /** Window chrome style. */
   os?: 'windows' | 'mac';
 }
