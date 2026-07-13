@@ -1,7 +1,7 @@
 {
   "name": "gifsmith",
-  "version": "0.1.0",
-  "description": "A movie-set framework for browser/app demo GIFs — script a walkthrough of any web or webview UI and get a tiny, smooth, seamless looping README GIF/WebP. Like vhs, but for GUI apps.",
+  "version": "0.1.1",
+  "description": "A movie-set framework for browser/app demo GIFs \u2014 script a walkthrough of any web or webview UI and get a tiny, smooth, seamless looping README GIF/WebP. Like vhs, but for GUI apps.",
   "keywords": [
     "demo",
     "gif",
