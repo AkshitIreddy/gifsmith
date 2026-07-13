@@ -106,6 +106,37 @@ async function runStep(page: Page, step: Step, tl: CompiledTimeline, ctx: PlayCo
       }
       break;
 
+    case 'drag': {
+      const handle = await driver.$(step.selector);
+      const box = handle ? await handle.boundingBox() : null; // page coords, iframe-safe
+      if (!box) {
+        ctx.log.warn(`drag: selector not found: ${step.selector}`);
+        break;
+      }
+      const sx = box.x + box.width / 2;
+      const sy = box.y + box.height / 2;
+      const ex = sx + step.dx;
+      const ey = sy + step.dy;
+      await cursorToSelector(page, appFrame, step.selector, 0, 'easeInOut');
+      await page.mouse.move(sx, sy);
+      await page.mouse.down();
+      const n = Math.max(12, Math.round(step.durationMs / 40));
+      for (let i = 1; i <= n; i++) {
+        const t = i / n;
+        const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOut
+        const x = sx + (ex - sx) * e;
+        const y = sy + (ey - sy) * e;
+        await page.mouse.move(x, y);
+        await page.evaluate(
+          (X: number, Y: number) => (window as any).__gifsmith?.cursorTo(X, Y, 1, 'linear'),
+          x, y,
+        );
+        await sleep(step.durationMs / n);
+      }
+      await page.mouse.up();
+      break;
+    }
+
     case 'scroll':
       // Eased scroll of a container, run in-page so the screencast captures it.
       await driver.evaluate(

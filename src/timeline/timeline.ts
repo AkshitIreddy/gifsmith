@@ -83,6 +83,19 @@ export class TimelineBuilder {
   }
 
   /** Glide the synthetic cursor to a selector's center or a page point. */
+  /** Press on a selector's centre and drag by a pixel delta — the synthetic
+   * cursor follows and real pointer events fire, so resize handles, sliders,
+   * and drag-and-drop UIs respond as they would to a person. */
+  drag(selector: string, delta: { dx?: number; dy?: number }, seconds = 0.9): this {
+    return this.push({
+      kind: 'drag',
+      selector,
+      dx: delta.dx ?? 0,
+      dy: delta.dy ?? 0,
+      durationMs: Math.round(seconds * 1000),
+    });
+  }
+
   cursorTo(target: string | Point, seconds = 0.6, easing: Easing = 'easeInOut'): this {
     const base = { kind: 'cursorTo' as const, durationMs: Math.round(seconds * 1000), easing };
     return this.push(typeof target === 'string' ? { ...base, selector: target } : { ...base, point: target });
@@ -185,6 +198,7 @@ export function estimateSeconds(steps: Step[]): number {
       case 'scroll':
       case 'cursorTo':
       case 'actorMove':
+      case 'drag':
         total += s.durationMs / 1000;
         break;
       case 'type':

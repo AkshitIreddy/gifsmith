@@ -29,6 +29,7 @@ const tl = timeline((t) => {
   t.hold(1.7);
   t.click('.card');
   t.scroll('.content', 460, 3.0);   // slow, eased read-scroll
+  t.drag('.divider', { dx: -160 }, 1.1); // real pointer drag — resize handles, sliders
   t.scroll('.content', -460, 1.6);
   t.click('.back');          // ...back to where we started
   t.hold(1.5);
