@@ -68,6 +68,28 @@ async function cursorToSelector(page: Page, appFrame: Frame | null | undefined, 
   );
 }
 
+/** Smooth-scroll a target into view before the cursor travels to it. A glide
+ * toward an off-screen element followed by puppeteer's instant auto-scroll on
+ * click reads as a camera jump; scrolling first keeps the shot continuous. */
+async function ensureInView(driver: Driver, selector: string): Promise<void> {
+  let scrolled = false;
+  try {
+    scrolled = (await driver.evaluate((s: string) => {
+      const el = document.querySelector(s);
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      if (r.top >= 0 && r.bottom <= window.innerHeight && r.left >= 0 && r.right <= window.innerWidth) {
+        return false;
+      }
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      return true;
+    }, selector)) as boolean;
+  } catch {
+    /* selector missing — the click/drag step reports it */
+  }
+  if (scrolled) await sleep(560); // let the smooth scroll settle before gliding
+}
+
 async function runStep(page: Page, step: Step, tl: CompiledTimeline, ctx: PlayContext): Promise<void> {
   const appFrame = ctx.appFrame ?? null;
   const driver: Driver = appFrame ?? page;
@@ -88,6 +110,7 @@ async function runStep(page: Page, step: Step, tl: CompiledTimeline, ctx: PlayCo
 
     case 'click':
       if (step.via === 'cursor') {
+        await ensureInView(driver, step.selector);
         await cursorToSelector(page, appFrame, step.selector, step.glideMs ?? 0, 'easeInOut');
         await page.evaluate(() => (window as any).__gifsmith?.ripple());
       }
@@ -107,6 +130,7 @@ async function runStep(page: Page, step: Step, tl: CompiledTimeline, ctx: PlayCo
       break;
 
     case 'drag': {
+      await ensureInView(driver, step.selector);
       const handle = await driver.$(step.selector);
       const box = handle ? await handle.boundingBox() : null; // page coords, iframe-safe
       if (!box) {
