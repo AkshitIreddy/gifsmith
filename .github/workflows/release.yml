@@ -1,0 +1,89 @@
+# Release: push a version tag (v*) and this builds, verifies, and publishes to
+# npm using **trusted publishing (OIDC)** — no NPM_TOKEN, no stored secret, no
+# manual `npm publish`/OTP. GitHub mints a short-lived OIDC token, npm exchanges
+# it for a one-off publish credential, and provenance is attested automatically.
+#
+#   npm version patch          # bumps package.json + package-lock.json, tags v0.0.0
+#   git push --follow-tags     # -> this workflow publishes it
+#
+# One-time setup on npmjs.com (see README › Releasing): package → Settings →
+# Trusted Publisher → GitHub Actions, with **workflow filename `release.yml`**.
+# A manual run (workflow_dispatch) does everything except publish — a safe way
+# to check the pipeline is green before tagging.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # REQUIRED — lets the runner mint the OIDC token npm exchanges
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Trusted publishing requires Node >= 22.14.0.
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      # The runner images ship an npm below the trusted-publishing floor
+      # (11.5.1), so upgrade before anything reads the registry.
+      - name: Upgrade npm
+        run: |
+          npm install -g npm@latest
+          echo "npm $(npm --version) / node $(node --version)"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # A tag must describe the version it actually ships, or the release history
+      # silently drifts from the registry.
+      - name: Verify tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          echo "tag=$TAG  package.json=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG"
+            exit 1
+          fi
+
+      # Verify the *packaged artifact* — this is what consumers actually get, and
+      # it catches the whole class of exports-map/files-field bugs that a plain
+      # build never sees.
+      - name: Verify the published artifact installs and imports
+        run: |
+          npm pack
+          TARBALL="$(ls gifsmith-*.tgz)"
+          echo "packed: $TARBALL ($(du -h "$TARBALL" | cut -f1))"
+          WORK="$(mktemp -d)"
+          cd "$WORK"
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE/$TARBALL" > /dev/null
+          node --input-type=module -e "
+            import { render, timeline, web, probe, dryRun } from 'gifsmith';
+            import { cursor, desktop } from 'gifsmith/props';
+            const fns = { render, timeline, web, probe, dryRun, cursor, desktop };
+            for (const [name, fn] of Object.entries(fns)) {
+              if (typeof fn !== 'function') throw new Error('missing export: ' + name);
+            }
+            console.log('ESM exports OK:', Object.keys(fns).join(', '));
+          "
+          npx --no-install gifsmith help > /dev/null && echo "CLI bin OK"
+
+      # No NODE_AUTH_TOKEN / NPM_TOKEN anywhere: npm detects the OIDC environment
+      # and authenticates with it directly.
+      - name: Publish to npm (trusted publishing)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm publish --provenance --access public

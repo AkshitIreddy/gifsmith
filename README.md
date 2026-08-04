@@ -219,6 +219,17 @@ Honest landscape — reach for these when they fit better:
 
 gifsmith deliberately reuses the good parts (CDP screencast, ffmpeg palette) and adds the direction model, the forward loop, natural pacing, and the agent ergonomics on top.
 
+## Releasing
+
+Releases are automated with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC) — there is no `NPM_TOKEN` in this repository, and no manual `npm publish`. Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds, verifies the packed tarball actually installs and imports, and publishes with [provenance](https://docs.npmjs.com/generating-provenance-statements).
+
+```bash
+npm version patch      # bumps package.json + lockfile, creates the v* tag
+git push --follow-tags # -> builds, verifies, publishes
+```
+
+The workflow refuses to publish if the tag and `package.json` version disagree. Running it manually (**Actions → release → Run workflow**) does everything *except* publish, so you can check the pipeline before tagging.
+
 ## Roadmap
 
 A richer MCP surface · more prop kits · deeper Tauri recipes · per-actor camera tracking.
