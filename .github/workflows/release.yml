@@ -1,31 +1,76 @@
-# Release: push a version tag (v*) and this builds, verifies, and publishes to
-# npm using **trusted publishing (OIDC)** — no NPM_TOKEN, no stored secret, no
-# manual `npm publish`/OTP. GitHub mints a short-lived OIDC token, npm exchanges
-# it for a one-off publish credential, and provenance is attested automatically.
+# Release: build, verify, publish to npm with **trusted publishing (OIDC)** —
+# no NPM_TOKEN, no stored secret, no manual OTP. GitHub mints a short-lived
+# OIDC token, npm exchanges it for a one-off publish credential, and provenance
+# is attested automatically.
 #
-#   npm version patch          # bumps package.json + package-lock.json, tags v0.0.0
-#   git push --follow-tags     # -> this workflow publishes it
+# Three ways to run it:
+#
+#   1. Push a version tag — the normal path. Publishes to npm AND creates the
+#      GitHub Release.
+#        npm version patch && git push --follow-tags
+#
+#   2. Run manually WITH a tag — publishes that existing tag to npm only.
+#      Use when the tag/Release already exists and just npm is behind. Tick
+#      "github_release" if you also want the Release created.
+#
+#   3. Run manually with NO tag — builds and verifies main, publishes nothing.
+#      A safe way to check the pipeline is green.
+#
+# Every step is idempotent: a version already on npm is skipped, and an existing
+# Release is left alone, so re-running is always safe.
 #
 # One-time setup on npmjs.com (see README › Releasing): package → Settings →
 # Trusted Publisher → GitHub Actions, with **workflow filename `release.yml`**.
-# A manual run (workflow_dispatch) does everything except publish — a safe way
-# to check the pipeline is green before tagging.
 name: release
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to publish to npm (e.g. v0.2.2). Leave blank to verify only.'
+        required: false
+        type: string
+      github_release:
+        description: 'Also create the GitHub Release for that tag'
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write # create the GitHub Release
   id-token: write # REQUIRED — lets the runner mint the OIDC token npm exchanges
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      # Decide what this run does before touching the repo: which ref to build,
+      # whether to publish, whether to cut a Release.
+      - name: Resolve target
+        id: t
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="$GITHUB_REF_NAME"; PUBLISH=true; RELEASE=true
+          else
+            TAG="${{ inputs.tag }}"
+            if [ -n "$TAG" ]; then
+              PUBLISH=true; RELEASE="${{ inputs.github_release }}"
+            else
+              PUBLISH=false; RELEASE=false
+            fi
+          fi
+          {
+            echo "tag=$TAG"
+            echo "ref=${TAG:-$GITHUB_REF}"
+            echo "publish=$PUBLISH"
+            echo "release=$RELEASE"
+          } >> "$GITHUB_OUTPUT"
+          echo "tag='${TAG:-<none>}'  publish=$PUBLISH  github_release=$RELEASE"
+
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.t.outputs.ref }}
 
       - uses: actions/setup-node@v7
         with:
@@ -46,22 +91,22 @@ jobs:
       - name: Build
         run: npm run build
 
-      # A tag must describe the version it actually ships, or the release history
-      # silently drifts from the registry.
+      # A tag must describe the version it actually ships, or the release
+      # history silently drifts from the registry.
       - name: Verify tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.t.outputs.tag != ''
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${{ steps.t.outputs.tag }}"; TAG="${TAG#v}"
           PKG="$(node -p "require('./package.json').version")"
           echo "tag=$TAG  package.json=$PKG"
           if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG"
+            echo "::error::Tag ${{ steps.t.outputs.tag }} does not match package.json version $PKG"
             exit 1
           fi
 
-      # Verify the *packaged artifact* — this is what consumers actually get, and
-      # it catches the whole class of exports-map/files-field bugs that a plain
-      # build never sees.
+      # Verify the *packaged artifact* — this is what consumers actually get,
+      # and it catches the whole class of exports-map/files-field bugs that a
+      # plain build never sees.
       - name: Verify the published artifact installs and imports
         run: |
           npm pack
@@ -82,8 +127,45 @@ jobs:
           "
           npx --no-install gifsmith help > /dev/null && echo "CLI bin OK"
 
-      # No NODE_AUTH_TOKEN / NPM_TOKEN anywhere: npm detects the OIDC environment
-      # and authenticates with it directly.
+      # Makes re-runs safe: npm rejects republishing a version, so skip it.
+      - name: Check whether this version is already on npm
+        id: npm
+        run: |
+          V="$(node -p "require('./package.json').version")"
+          if npm view "gifsmith@$V" version > /dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::gifsmith@$V is already on npm — publish will be skipped."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "gifsmith@$V is not published yet."
+          fi
+
+      # No NODE_AUTH_TOKEN / NPM_TOKEN anywhere: npm detects the OIDC
+      # environment and authenticates with it directly.
       - name: Publish to npm (trusted publishing)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.t.outputs.publish == 'true' && steps.npm.outputs.already == 'false'
         run: npm publish --provenance --access public
+
+      - name: Create the GitHub Release
+        if: steps.t.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.t.outputs.tag }}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "::notice::Release $TAG already exists — leaving it untouched."
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+            echo "Created Release $TAG"
+          fi
+
+      - name: Summary
+        run: |
+          V="$(node -p "require('./package.json').version")"
+          {
+            echo "### gifsmith $V"
+            echo ""
+            echo "- tag: \`${{ steps.t.outputs.tag || '—' }}\`"
+            echo "- npm publish: ${{ steps.t.outputs.publish == 'true' && steps.npm.outputs.already == 'false' && 'published' || 'skipped' }}"
+            echo "- GitHub Release: ${{ steps.t.outputs.release == 'true' && 'ensured' || 'skipped' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
