@@ -228,7 +228,15 @@ npm version patch      # bumps package.json + lockfile, creates the v* tag
 git push --follow-tags # -> builds, verifies, publishes
 ```
 
-The workflow refuses to publish if the tag and `package.json` version disagree. Running it manually (**Actions → release → Run workflow**) does everything *except* publish, so you can check the pipeline before tagging.
+That publishes to npm **and** creates the GitHub Release. Two other modes, from **Actions → release → Run workflow**:
+
+| Run | Result |
+|---|---|
+| Push a `v*` tag | publish to npm + create the Release |
+| Manual, **with** a tag | publish that tag to npm only — for when the tag/Release already exists and npm is behind (tick `github_release` to cut the Release too) |
+| Manual, **no** tag | build and verify only, publishes nothing |
+
+The workflow refuses to publish if the tag and `package.json` version disagree, and every step is idempotent — a version already on npm is skipped and an existing Release is left untouched — so re-running is always safe.
 
 ## Roadmap
 
