@@ -56,6 +56,8 @@ await render({
 
 ## Install
 
+<sub>Changes in each release are in [CHANGELOG.md](CHANGELOG.md); every GitHub Release carries its section inline.</sub>
+
 ```bash
 npm i -D gifsmith
 ```
