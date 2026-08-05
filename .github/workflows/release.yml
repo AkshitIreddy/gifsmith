@@ -155,7 +155,36 @@ jobs:
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "::notice::Release $TAG already exists — leaving it untouched."
           else
-            gh release create "$TAG" --title "$TAG" --generate-notes
+            # The Release body is the CHANGELOG's section for this version, with
+            # GitHub's generated commit list appended under it (the API appends
+            # generated notes to whatever body you supply). The changelog is the
+            # written account of WHY; the commit list is the record of what.
+            VER="${TAG#v}"
+            NOTES="$RUNNER_TEMP/notes.md"
+            # NO BRACKET REGEX. The heading is "## [0.2.3](link)", and getting a
+            # literal `[` through YAML, then the shell, then awk's own string
+            # parser takes four backslashes and still warns — the first version
+            # of this died with "invalid regexp: Unmatched [". `index()` needs
+            # no escaping at all and says the same thing.
+            has_section() {
+              awk -v v="$VER" '/^## / && index($0, v) { f = 1 } END { exit !f }' CHANGELOG.md
+            }
+            if [ -f CHANGELOG.md ] && has_section; then
+              awk -v v="$VER" '
+                /^## / && index($0, v) { on = 1; next }
+                on && /^## / { exit }
+                on { print }
+              ' CHANGELOG.md > "$NOTES"
+              echo "" >> "$NOTES"
+            else
+              echo "::warning::no CHANGELOG.md section for $VER — falling back to the link only"
+              : > "$NOTES"
+            fi
+            {
+              echo "📖 **[Full changelog](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md)**"
+              echo ""
+            } >> "$NOTES"
+            gh release create "$TAG" --title "$TAG" --notes-file "$NOTES" --generate-notes
             echo "Created Release $TAG"
           fi
 
