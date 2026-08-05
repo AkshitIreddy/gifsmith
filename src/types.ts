@@ -153,6 +153,26 @@ export type LoopStrategy =
   /** Pick `anchor` if the timeline declares a loopAnchor, else `crossfade`. */
   | 'auto';
 
+/**
+ * The loop, with its knobs — `loop: 'anchor'` stays valid and means
+ * `{ strategy: 'anchor' }`.
+ *
+ * `minCycleSeconds` existed and was threaded all the way to the search, but
+ * nothing could set it: `RenderConfig.loop` was a bare string. It is the one
+ * lever that matters for a long scripted demo, so it is reachable now.
+ */
+export interface LoopOptions {
+  strategy: LoopStrategy;
+  /**
+   * The shortest loop the anchor search may return, in seconds. Default 3.
+   *
+   * Raise it when the scene holds still on its neutral pose: every pair of
+   * frames inside that hold matches, so without a floor the search is free to
+   * hand back a few motionless seconds and drop the rest of the walkthrough.
+   */
+  minCycleSeconds?: number;
+}
+
 export type OutputFormat = 'gif' | 'webp';
 
 export interface EncodeOptions {
@@ -227,7 +247,7 @@ export interface RenderConfig {
   /** The choreography. */
   timeline: CompiledTimeline;
 
-  loop?: LoopStrategy;
+  loop?: LoopStrategy | LoopOptions;
   encode?: Partial<EncodeOptions>;
 
   /** Cooperation with the app's own engine (window.__demo handshake). */

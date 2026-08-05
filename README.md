@@ -87,6 +87,14 @@ Two strategies, auto-picked:
 
 **Scripted-anchor trim** (`loop: 'anchor'`) — if your timeline marks a `loopAnchor()` (a neutral hold the scene returns to), gifsmith finds the best hold-to-hold seam by grayscale-thumbnail frame-MSE and trims to it. **Zero blending artifacts** — the last frame *is* the first frame. Best for scripted product demos. (The bundled example loops with a seam MSE of ~0.08.)
 
+Among seams that are equally invisible, the **longest** wins. Lowest-MSE alone is the wrong rule for a walkthrough: the scene holds still on its neutral pose for a beat after `loopAnchor()`, every pair of frames inside that hold matches almost perfectly, and the search would hand back `minCycleSeconds` of a motionless screen and drop the tour. If several wraps are indistinguishable, you want as much of the scene as possible.
+
+Raise the floor when the whole walkthrough should survive:
+
+```ts
+loop: { strategy: 'anchor', minCycleSeconds: 30 }   // never return less than 30s
+```
+
 **Half-period self-crossfade** (`loop: 'crossfade'`) — for continuously-evolving/ambient motion that never returns to a pose, gifsmith blends each frame with its half-period counterpart under a raised-cosine weight:
 
 ```

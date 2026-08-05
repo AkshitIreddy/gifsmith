@@ -46,14 +46,42 @@ export function findAnchorLoop(
   let bestStart = Math.max(0, Math.min(opts.anchorFrame, n - minCycle - 1));
   let bestEnd = n - 1;
   let best = mse(thumbs[bestEnd], thumbs[bestStart]);
+  /** The MSE of the pair actually chosen, which may differ from the minimum. */
+  let bestScore = best;
 
+  /*
+   * LOWEST MSE, THEN LONGEST SPAN — and the second half of that is the whole
+   * point.
+   *
+   * Picking the globally-lowest MSE alone is wrong for the scripted demos this
+   * strategy exists for. A product tour holds still on its neutral pose for a
+   * beat after `loopAnchor()`, so every pair of frames inside that hold matches
+   * almost perfectly; the search then returns the SHORTEST qualifying loop —
+   * `minCycle` seconds of a motionless scene — and throws the tour away.
+   * Observed on a 50-second walkthrough that returned home exactly as intended:
+   * anchor 45, end 105, seam MSE 0.0, a four-second clip of a bookshelf doing
+   * nothing.
+   *
+   * Two seams a hair apart in MSE are equally invisible — the metric stops
+   * discriminating long before the eye does. So a seam within `TIE` of the best
+   * one is treated as just as good, and among those the LONGEST wins. That
+   * encodes the author's actual intent: if several wraps are invisible, use as
+   * much of the scene as possible.
+   */
+  const TIE = 0.75;
   const consider = (a: number, e: number): void => {
     if (a < 0 || e >= n || e - a < minCycle) return;
     const d = mse(thumbs[e], thumbs[a]);
-    if (d < best) {
-      best = d;
+    const span = e - a;
+    const bestSpan = bestEnd - bestStart;
+    // Strictly better seam, or an equally-invisible one that keeps more scene.
+    if (d < best - TIE || (d <= best + TIE && span > bestSpan)) {
+      // Track the true minimum so the reported seamMSE stays honest even when
+      // a marginally-worse-but-longer wrap is chosen.
+      best = Math.min(best, d);
       bestStart = a;
       bestEnd = e;
+      bestScore = d;
     }
   };
 
@@ -71,5 +99,7 @@ export function findAnchorLoop(
     for (let a = 0; a <= e - minCycle; a++) consider(a, e);
   }
 
-  return { start: bestStart, end: bestEnd, seamMSE: best };
+  // The seam that will actually be shown, not the best one seen on the way —
+  // the Director's "seam too high" warning has to be about the real wrap.
+  return { start: bestStart, end: bestEnd, seamMSE: bestScore };
 }

@@ -125,8 +125,16 @@ export async function render(cfg: RenderConfig): Promise<RenderResult> {
     if (pacedFrames.length === 0) throw new Error('gifsmith: pacing produced no frames');
 
     // ---- loop ---------------------------------------------------------------
+    // `loop` accepts a bare strategy or an options object; normalise once.
+    const loopCfg =
+      typeof cfg.loop === 'string' || cfg.loop == null
+        ? { strategy: cfg.loop ?? ('auto' as const) }
+        : cfg.loop;
     const plan = await planLoop({
-      strategy: cfg.loop ?? 'auto',
+      strategy: loopCfg.strategy,
+      ...(loopCfg.minCycleSeconds != null
+        ? { minCycleSeconds: loopCfg.minCycleSeconds }
+        : {}),
       pacedDir,
       pacedFrames,
       fps: encode.fps,
