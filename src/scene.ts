@@ -16,6 +16,7 @@
 import type { Frame, Page } from 'puppeteer-core';
 import type { ComposeMode, Prop, PropContext, StageOptions } from './types.js';
 import { installRuntime } from './bridge.js';
+import { ConfigError } from './errors.js';
 import { Logger } from './log.js';
 
 export interface ComposeArgs {
@@ -75,10 +76,19 @@ async function composeOverlay(page: Page, args: ComposeArgs): Promise<void> {
 }
 
 async function composeStage(page: Page, args: ComposeArgs): Promise<Composition> {
+  // Both rules are also checked by `config.ts` before a browser is launched —
+  // these are the backstop for a caller who reaches composeScene directly. They
+  // are ConfigErrors so that whoever catches them can tell a bad config from a
+  // crash; see errors.ts.
   const url = args.targetUrl;
-  if (!url) throw new Error("gifsmith: stage mode needs target.url");
+  if (!url) {
+    throw new ConfigError(
+      "gifsmith: compose:'stage' needs target.url — the app is framed in an iframe, so there has " +
+        'to be an address to frame.',
+    );
+  }
   if (url.startsWith('file:')) {
-    throw new Error(
+    throw new ConfigError(
       "gifsmith: compose:'stage' can't frame a file:// app (a non-file page may " +
         'not embed it). Serve the app over http(s) — a dev server — or use ' +
         "compose:'overlay'.",

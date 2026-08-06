@@ -91,6 +91,23 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The gate. The suite is this release's headline addition, and for most of
+      # its development this workflow could not have run it: install, build,
+      # verify the tag, pack, publish, with no `npm test` anywhere. A pipeline
+      # that can publish a red suite is not a gate, it is a deployment script
+      # with a checklist next to it.
+      #
+      # It sits BEFORE the tag check and the pack on purpose: a broken build or
+      # a failing test should cost seconds and stop here, not after npm has been
+      # asked anything. GIFSMITH_REQUIRE_MCP turns the optional-peer skips into
+      # failures — `npm ci` has the SDK as a devDependency, so on this runner a
+      # skipped MCP test means something is wrong rather than something is
+      # absent.
+      - name: Test
+        run: npm test
+        env:
+          GIFSMITH_REQUIRE_MCP: '1'
+
       # A tag must describe the version it actually ships, or the release
       # history silently drifts from the registry.
       - name: Verify tag matches package.json
@@ -126,6 +143,44 @@ jobs:
             console.log('ESM exports OK:', Object.keys(fns).join(', '));
           "
           npx --no-install gifsmith help > /dev/null && echo "CLI bin OK"
+
+          # What the install actually COST, which this step never looked at.
+          # Through most of 0.3.0's development this tree packed at 130 KB and
+          # installed 170 packages / 49.5 MB, because
+          # @modelcontextprotocol/sdk sat in optionalDependencies — and npm
+          # installs those BY DEFAULT ("optional" only promises to tolerate an
+          # install failure). The tarball was fine; the closure was not, and
+          # nothing in this job could tell. It is 85 packages / 35 MB now, all
+          # of it puppeteer-core.
+          # Package count and the SUM OF FILE SIZES — not `du`, which reports
+          # allocated blocks and reads ~9 MB high on this tree.
+          read -r PKGS MB < <(node -e "
+            const fs=require('fs'),p=require('path');
+            let n=0,b=0;
+            const walk=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){
+              const f=p.join(d,e.name);
+              if(e.isDirectory())walk(f); else if(e.isFile())b+=fs.statSync(f).size;
+            }};
+            walk('node_modules');
+            for(const e of fs.readdirSync('node_modules')){
+              if(e.startsWith('.'))continue;
+              n += e.startsWith('@') ? fs.readdirSync(p.join('node_modules',e)).length : 1;
+            }
+            console.log(n, Math.round(b/1048576));
+          ")
+          echo "install cost: $PKGS packages / ${MB} MB"
+          if [ "$PKGS" -gt 110 ] || [ "$MB" -gt 45 ]; then
+            echo "::error::a plain install of gifsmith pulled in $PKGS packages / ${MB} MB."
+            echo "puppeteer-core is the entire intended cost (85 packages / 35 MB)."
+            npm ls --all --depth=1 || true
+            exit 1
+          fi
+          for BAD in @modelcontextprotocol/sdk express hono cors; do
+            if [ -d "node_modules/$BAD" ]; then
+              echo "::error::$BAD reached a consumer's node_modules"
+              exit 1
+            fi
+          done
 
       # Makes re-runs safe: npm rejects republishing a version, so skip it.
       - name: Check whether this version is already on npm

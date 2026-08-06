@@ -9,9 +9,17 @@ import type { DryRunReport, RenderConfig, Step } from '../types.js';
 import { Logger } from '../log.js';
 import { connect } from '../browser.js';
 import { composeScene } from '../scene.js';
+import { sceneProblems } from '../config.js';
 import { estimateSeconds } from '../timeline/timeline.js';
 
-type SceneConfig = Pick<RenderConfig, 'target' | 'props' | 'timeline' | 'viewport' | 'camera' | 'compose' | 'stage' | 'logLevel'>;
+/**
+ * `capture` belongs here for the same reason everything else does: dryRun's job
+ * is to reject a scene before it costs a capture, and two of the ways a scene
+ * can be rejected live in that field — a mode `render()` will throw on, and the
+ * deterministic/stage combination it refuses. Without the field they were both
+ * reported as `ok: true` and discovered a browser launch later.
+ */
+type SceneConfig = Pick<RenderConfig, 'target' | 'props' | 'timeline' | 'viewport' | 'camera' | 'compose' | 'stage' | 'capture' | 'logLevel'>;
 
 function collectSelectors(steps: Step[], acc: { sel: string; kind: string }[]): void {
   for (const s of steps) {
@@ -21,6 +29,17 @@ function collectSelectors(steps: Step[], acc: { sel: string; kind: string }[]): 
     else if (s.kind === 'parallel') s.branches.forEach((b) => collectSelectors(b, acc));
     else if (s.kind === 'sequence') collectSelectors(s.steps, acc);
   }
+}
+
+/** `call` steps that declare no duration — see the warning that quotes it. */
+function undeclaredCalls(steps: Step[]): number {
+  let n = 0;
+  for (const s of steps) {
+    if (s.kind === 'call' && s.seconds == null) n++;
+    else if (s.kind === 'parallel') for (const b of s.branches) n += undeclaredCalls(b);
+    else if (s.kind === 'sequence') n += undeclaredCalls(s.steps);
+  }
+  return n;
 }
 
 export async function dryRun(cfg: SceneConfig): Promise<DryRunReport> {
@@ -36,6 +55,30 @@ export async function dryRun(cfg: SceneConfig): Promise<DryRunReport> {
 
   const viewport = { width: 1280, height: 800, deviceScaleFactor: 1, ...(cfg.viewport ?? {}) };
   const compose = cfg.compose ?? 'overlay';
+
+  // Every config error that would otherwise surface as a thrown render, one
+  // browser launch later. These are the same rules `render()` enforces —
+  // `config.ts` owns them, `render` throws on the first and a dry run reports
+  // them all, which is the entire reason the rules return strings.
+  errors.push(...sceneProblems({ ...cfg, compose }));
+
+  // Not an error: a launch target with no url renders a blank page, which is
+  // occasionally deliberate (a timeline that navigates itself in a `call`).
+  if (cfg.target && !cfg.target.url && !cfg.target.browserURL && !cfg.target.browserWSEndpoint) {
+    warnings.push('target has no url and no CDP endpoint — the render will start on a blank page.');
+  }
+
+  // A `call` step is worth however much scene time its callback spends, and
+  // nothing here can know that — so the planned total is a floor whenever one
+  // is undeclared, and saying so beats reporting a confident wrong number.
+  const undeclared = undeclaredCalls(cfg.timeline.steps);
+  if (undeclared) {
+    warnings.push(
+      `${undeclared} call step(s) declare no duration, so totalPlannedSeconds (${totalPlannedSeconds}s) ` +
+        `excludes whatever their callbacks spend — under capture:'deterministic' a callback's ` +
+        `ctx.advance() is real scene time and can be most of a scene. Pass it: t.call(fn, { seconds: 2 }).`,
+    );
+  }
   const connectTarget = compose === 'stage' ? { ...cfg.target, url: undefined } : cfg.target;
   const conn = await connect(connectTarget, viewport, log);
   try {

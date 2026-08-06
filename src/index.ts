@@ -24,6 +24,13 @@
 export { render } from './director.js';
 export { timeline, TimelineBuilder, estimateSeconds } from './timeline/timeline.js';
 
+// Failures. All three extend Error, so nothing about catching one has changed —
+// they exist so a caller (the CLI above all) can tell "you gave me a value I
+// cannot use" from "gifsmith broke" without reading a message string.
+export { UsageError, ConfigError, EnvironmentError } from './errors.js';
+/** The config rules themselves, for a caller that wants them without a dry run. */
+export { configProblems, sceneProblems, assertConfig, assertScene } from './config.js';
+
 // Adapters
 export { web, tauri, electron, TAURI_LAUNCH_HELP, ELECTRON_LAUNCH_HELP } from './adapters/index.js';
 export type { AttachOptions } from './adapters/index.js';
@@ -34,6 +41,7 @@ export { snapshot, contactSheet } from './ergonomics/snapshot.js';
 export type { ContactSheet } from './ergonomics/snapshot.js';
 export { dryRun } from './ergonomics/dryRun.js';
 export { expectVisible, expectStable, expectInFrame } from './ergonomics/assert.js';
+
 
 // Bridge (for apps that opt into cooperation)
 export { RUNTIME_JS } from './bridge.js';
@@ -51,12 +59,19 @@ export type {
   PropContext,
   CompiledTimeline,
   Step,
+  PageCallback,
+  CallContext,
   Easing,
   Point,
   Size,
   LoopStrategy,
+  LoopOptions,
+  CaptureMode,
+  CaptureOptions,
   OutputFormat,
   EncodeOptions,
+  PaletteMode,
+  DitherMode,
   ProbeResult,
   ProbeElement,
   DryRunReport,

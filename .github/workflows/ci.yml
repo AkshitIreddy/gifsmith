@@ -1,0 +1,130 @@
+# CI: build and run the test suite on every push and pull request.
+#
+# The test suite is this release's headline addition, and until this file existed
+# nothing in the pipeline ran it. `release.yml` was the only workflow — install,
+# build, verify the tag, pack, install, import, publish — with no `npm test`
+# anywhere, so a red suite could reach npm with a green run behind it. A gate
+# that never runs is decoration.
+#
+# `npm test` builds first (see package.json), so this covers the compile too.
+# Nothing here needs a browser or ffmpeg: the suite deliberately covers only the
+# parts that can be checked without them, which is why it can run on every push
+# in well under a minute. Everything downstream of a browser is exercised by
+# `npm run example`, which is not a CI job on purpose — it needs Chromium and
+# ffmpeg and it renders a real GIF.
+name: ci
+
+on:
+  push:
+    # Branches only. A `branches` filter already excludes tag pushes, and a tag
+    # is release.yml's business — which runs this same suite before publishing.
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor from package.json "engines", and current. The floor is not
+        # ceremony: the suite uses node:test and the built ESM output, and both
+        # have moved under this package before.
+        node: ['18', '24']
+    name: node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test (builds first)
+        # The MCP tests SKIP when @modelcontextprotocol/sdk is absent, because
+        # `npm test` has to pass for someone who never installed an optional
+        # peer. CI is exactly where a skip is not good enough: `npm ci` has the
+        # SDK as a devDependency, so here a skip means something broke.
+        run: npm test
+        env:
+          GIFSMITH_REQUIRE_MCP: '1'
+
+  # The install cost, measured rather than asserted. packaging.test.mjs checks
+  # the tarball's file list and the declared dependency shape; this checks what
+  # npm ACTUALLY installs from it, which is the thing that regressed —
+  # `optionalDependencies` looked opt-in in the manifest and pulled express,
+  # hono, @hono/node-server and cors into every consumer's node_modules.
+  install-cost:
+    runs-on: ubuntu-latest
+    name: install cost (clean project)
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Pack, install into a clean project, and count what arrived
+        run: |
+          npm pack
+          TARBALL="$PWD/$(ls gifsmith-*.tgz)"
+          WORK="$(mktemp -d)"
+          cd "$WORK"
+          npm init -y > /dev/null
+          npm install "$TARBALL" --no-audit --no-fund > /dev/null
+
+          # Top-level entries in node_modules with scopes expanded (the number a
+          # human gets by looking) and the SUM OF FILE SIZES. Deliberately not
+          # `du`, which reports allocated blocks: on this same tree du says 44 MB
+          # against 35 MB of actual bytes, and a threshold set against one and
+          # measured with the other has almost no headroom left.
+          read -r PKGS MB < <(node -e "
+            const fs=require('fs'),p=require('path');
+            let n=0,b=0;
+            const walk=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){
+              const f=p.join(d,e.name);
+              if(e.isDirectory())walk(f); else if(e.isFile())b+=fs.statSync(f).size;
+            }};
+            walk('node_modules');
+            for(const e of fs.readdirSync('node_modules')){
+              if(e.startsWith('.'))continue;
+              n += e.startsWith('@') ? fs.readdirSync(p.join('node_modules',e)).length : 1;
+            }
+            console.log(n, Math.round(b/1048576));
+          ")
+          echo "packages: $PKGS   node_modules: ${MB} MB"
+
+          # A ceiling, not a target, and the numbers behind it were measured
+          # rather than guessed: puppeteer-core's own closure is the entire
+          # intended cost at 85 packages / 35 MB (chromium-bidi 10.9 MB,
+          # puppeteer-core 7.8, devtools-protocol 3.0). With the MCP SDK dragged
+          # in it was 170 packages / 49.5 MB. The package count is the sharp
+          # signal — it doubled — so the ceiling sits just above the honest
+          # number, with headroom for a platform whose optional binaries differ.
+          if [ "$PKGS" -gt 110 ] || [ "$MB" -gt 45 ]; then
+            echo "::error::a plain install of gifsmith pulled in $PKGS packages / ${MB} MB."
+            echo "Something moved into dependencies (or optionalDependencies, which npm"
+            echo "installs BY DEFAULT). See src/mcp/server.ts and test/packaging.test.mjs."
+            npm ls --all --depth=1 || true
+            exit 1
+          fi
+
+          # And the SDK's stack specifically, by name.
+          for BAD in @modelcontextprotocol/sdk express hono @hono/node-server cors; do
+            if [ -d "node_modules/$BAD" ]; then
+              echo "::error::$BAD was installed by a plain 'npm i gifsmith'"
+              exit 1
+            fi
+          done
+          echo "clean: no MCP SDK, no HTTP server stack"

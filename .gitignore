@@ -5,3 +5,6 @@ dist/
 # gifsmith scratch output
 .gifsmith/
 examples/**/out/
+# `npm pack` leaves one of these behind, and both CI jobs and any local check of
+# what actually ships run it.
+*.tgz

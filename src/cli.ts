@@ -10,69 +10,32 @@
  * timeline is authored in code (the DSL), vhs-.tape in spirit but fully
  * programmable. CLI flags override the config's encode/loop options.
  */
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import type { RenderConfig } from './types.js';
 import { render } from './director.js';
 import { probe } from './ergonomics/probe.js';
 import { web } from './adapters/index.js';
 import { ffmpegAvailable, FFMPEG } from './encode/ffmpeg.js';
 import { findChrome } from './browser.js';
 
-interface Flags {
-  _: string[];
-  [k: string]: string | boolean | string[];
-}
+// The flag layer lives next door so it can be tested without launching a
+// render — see flags.ts. `test/cli.test.mjs` then spawns THIS file, because a
+// parser that is right in isolation is not the same claim as a command that
+// behaves: the flag layer named `--lossless demo.mjs` for a whole release while
+// the command still printed the bare usage line, since the check below for a
+// missing positional ran first.
+import {
+  parse, applyOverrides, bool, checkFlags, swallowedConfig,
+  RENDER_FLAGS, PROBE_FLAGS,
+} from './flags.js';
+import { UsageError, isEnvironmentError, isUserFacing } from './errors.js';
+// Loading the config module is `loadConfig.ts`'s job, not this file's, for the
+// reason `errors.ts` gives about validation: the same code was written twice
+// (here and in mcp/server.ts), only this copy guarded a missing file, and every
+// OTHER way a module fails to load — a syntax error, an unresolved import, a
+// `.ts` path, a directory — printed node's ESM stack and exited 1. A fix at
+// this call site would have covered exactly one of the two callers again.
+import { loadConfigModule } from './loadConfig.js';
 
-function parse(argv: string[]): Flags {
-  const flags: Flags = { _: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith('--')) {
-      const key = a.slice(2);
-      const next = argv[i + 1];
-      if (next === undefined || next.startsWith('--')) flags[key] = true;
-      else { flags[key] = next; i++; }
-    } else {
-      (flags._ as string[]).push(a);
-    }
-  }
-  return flags;
-}
-
-const num = (v: unknown): number | undefined => (v == null ? undefined : Number(v));
-
-async function loadConfig(file: string): Promise<RenderConfig> {
-  const abs = path.resolve(file);
-  const mod = await import(pathToFileURL(abs).href);
-  const cfg = mod.default ?? mod.config;
-  if (!cfg) throw new Error(`gifsmith: ${file} must default-export (or export \`config\`) a RenderConfig`);
-  return typeof cfg === 'function' ? cfg() : cfg;
-}
-
-function applyOverrides(cfg: RenderConfig, f: Flags): RenderConfig {
-  const encode = { ...(cfg.encode ?? {}) };
-  if (f.width) encode.width = num(f.width);
-  if (f.fps) encode.fps = num(f.fps);
-  if (f.speed) encode.speed = num(f.speed);
-  if (f.colors) encode.colors = num(f.colors);
-  if (f.quality) encode.quality = num(f.quality);
-  if (f['target-mb']) encode.targetMB = num(f['target-mb']);
-  return {
-    ...cfg,
-    out: (f.out as string) ?? cfg.out,
-    format: (f.format as any) ?? cfg.format,
-    alsoEmit: f['also-webp'] ? Array.from(new Set([...(cfg.alsoEmit ?? []), 'webp' as const])) : cfg.alsoEmit,
-    loop: (f.loop as any) ?? cfg.loop,
-    encode,
-    keepFrames: !!f['keep-frames'] || cfg.keepFrames,
-    logLevel: f.quiet ? 'warn' : f.debug ? 'debug' : cfg.logLevel,
-    target: {
-      ...cfg.target,
-      headful: !!f.headful || cfg.target.headful,
-    },
-  };
-}
+const loadConfig = (file: string) => loadConfigModule(file, (m) => new UsageError(m));
 
 const USAGE = `gifsmith — browser/app demo GIF/WebP maker
 
@@ -81,19 +44,39 @@ Usage:
   gifsmith probe  <url> [--json]      Print interactive elements + bridge status
   gifsmith doctor                     Check ffmpeg + browser detection
 
+
 Render flags (override the config):
   --out <path>        --format <gif|webp>   --also-webp
   --width <px>        --fps <n>             --speed <x>
   --colors <n>        --quality <0-100>     --target-mb <n>
   --loop <auto|anchor|crossfade|none>
+  --capture <screencast|deterministic>
+      screencast (default) records real paints in real time.
+      deterministic renders on Chromium's virtual clock — slower, but the
+      output is identical whatever the machine was doing at the time.
   --headful           --keep-frames         --debug   --quiet
+      Every flag above takes true|false as well as being written bare, and an
+      explicit false overrides a config that said true — except --debug and
+      --quiet, which are shortcuts onto logLevel: "false" there means "not
+      asking", and the config's own logLevel stands. --quiet wins over --debug.
+
+Quality flags (the defaults are tuned for size; these buy fidelity back):
+  --frame-format <jpeg|png>   captured frames; png is lossless (see --capture)
+  --palette <diff|full|perFrame>   GIF palette: shared, shared-weighted-by-all,
+                                   or a fresh one every frame (best, biggest)
+  --dither <bayer|floyd_steinberg|sierra2|sierra2_4a|atkinson|none>
+  --bayer-scale <0-5>         finer pattern at higher values (default 4)
+  --lossless                  WebP only: keep every pixel
 `;
 
 async function main(): Promise<void> {
   const f = parse(process.argv.slice(2));
   const cmd = (f._ as string[])[0] ?? 'help';
 
-  if (cmd === 'help' || f.help) { console.log(USAGE); return; }
+  // `'help' in f` rather than `bool(f, 'help')`: `--help` is the one flag whose
+  // job is to explain the command line, so it must not be able to fail on the
+  // shape of the command line. `gifsmith render --help demo.mjs` prints usage.
+  if (cmd === 'help' || 'help' in f) { console.log(USAGE); return; }
 
   if (cmd === 'doctor') {
     const ff = ffmpegAvailable();
@@ -103,10 +86,14 @@ async function main(): Promise<void> {
   }
 
   if (cmd === 'probe') {
+    // Flags first, positionals second — see checkFlags. `probe --json <url>`
+    // parses as `json: '<url>'` with no positional left, and reporting that as
+    // "you gave me no url" describes the wrong half of the mistake.
+    checkFlags(f, PROBE_FLAGS);
     const url = (f._ as string[])[1];
-    if (!url) { console.error('gifsmith probe <url>'); process.exit(2); }
-    const result = await probe({ target: web(url), logLevel: f.debug ? 'debug' : 'warn' });
-    if (f.json) console.log(JSON.stringify(result, null, 2));
+    if (!url) throw new UsageError('probe needs a url: gifsmith probe <url> [--json]');
+    const result = await probe({ target: web(url), logLevel: bool(f, 'debug') ? 'debug' : 'warn' });
+    if (bool(f, 'json')) console.log(JSON.stringify(result, null, 2));
     else {
       console.log(`${result.title}  (${result.url})`);
       console.log(`bridge: ${result.hasBridge ? 'window.__demo present' : 'none'} | props: ${result.props.join(', ') || '—'}`);
@@ -119,8 +106,20 @@ async function main(): Promise<void> {
   }
 
   if (cmd === 'render') {
+    // The ordering that finding #1 was about. Every render flag is read for its
+    // errors HERE, before the positional is looked at, because the commonest
+    // mistake is a flag eating the positional: `--lossless demo.mjs` leaves no
+    // config path, and "gifsmith render <config.mjs>" is then a true statement
+    // that sends the reader hunting for an argument they did type.
+    checkFlags(f, RENDER_FLAGS);
     const file = (f._ as string[])[1];
-    if (!file) { console.error('gifsmith render <config.mjs>'); process.exit(2); }
+    if (!file) {
+      const eaten = swallowedConfig(f);
+      throw new UsageError(
+        'render needs a config module: gifsmith render <config.(mjs|js)>' +
+          (eaten ? ` — note --${eaten.key} took "${eaten.value}" as its value` : ''),
+      );
+    }
     const cfg = applyOverrides(await loadConfig(file), f);
     const result = await render(cfg);
     console.log('\n' + JSON.stringify(result, null, 2));
@@ -132,7 +131,33 @@ async function main(): Promise<void> {
   process.exit(2);
 }
 
+/**
+ * One prefix, wherever the message came from.
+ *
+ * The flag layer's messages carry no `gifsmith:` (this handler owns it) and the
+ * library's do (a `dryRun` report and a programmatic caller have nothing else to
+ * say who is speaking). Printing both produced the line the gate quoted —
+ * `gifsmith: Error: gifsmith: capture.mode must be …` — so the prefix is added
+ * only when it is not already there, and never twice.
+ */
+const oneLine = (message: string): string =>
+  message.startsWith('gifsmith:') ? message : `gifsmith: ${message}`;
+
 main().catch((e) => {
+  // Three failures, three shapes, decided by TYPE and not by inspecting a
+  // message — because the previous two rounds of this bug were both a validator
+  // in a layer nobody had thought about. See errors.ts.
+  //
+  //   UsageError / ConfigError  the user's mistake      → one line, exit 2
+  //   EnvironmentError          the machine's           → one line, exit 1
+  //   anything else             ours                    → the stack, exit 1
+  //
+  // A stack for a typo is noise about something the user can already see; a
+  // stack for a real failure is the only thing that makes it debuggable.
+  if (isUserFacing(e)) {
+    console.error(oneLine(e.message));
+    process.exit(isEnvironmentError(e) ? 1 : 2);
+  }
   console.error('gifsmith:', e?.stack || e?.message || e);
   process.exit(1);
 });

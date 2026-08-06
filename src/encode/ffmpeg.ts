@@ -5,6 +5,7 @@
  * feed it. See loop/ and encode/.
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { EnvironmentError } from '../errors.js';
 
 export const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 
@@ -17,9 +18,15 @@ export function ffmpegAvailable(): boolean {
   }
 }
 
+/**
+ * An `EnvironmentError`, not a bare one: a missing ffmpeg is the most common
+ * first-run failure there is, and there is nothing in a stack trace for it. The
+ * CLI prints this as one line (`gifsmith doctor` says the same thing) and exits
+ * 1 — it is a real failure, not a mistake in the command line.
+ */
 export function assertFfmpeg(): void {
   if (!ffmpegAvailable()) {
-    throw new Error(
+    throw new EnvironmentError(
       'gifsmith: ffmpeg not found on PATH. Install it (https://ffmpeg.org/) ' +
         'or set FFMPEG_PATH. It is the one non-npm dependency.',
     );
