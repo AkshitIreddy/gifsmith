@@ -377,6 +377,24 @@ A gallery of self-contained demos, each showing a different capability — see [
   <img src="examples/halo/demo.webp" width="49%" alt="Halo stage-mode demo" />
 </p>
 
+## Built with gifsmith
+
+README demos from shipped apps — scripted walkthroughs of the real UI, looped forward, usually a few MB each.
+
+<p align="center">
+  <a href="https://github.com/AkshitIreddy/Alcove"><img src="https://raw.githubusercontent.com/AkshitIreddy/gifsmith/main/docs/showcase-alcove.webp" width="880" alt="Alcove — a hand-drawn notebook on a flat bookshelf, opening into block-edited pages" /></a>
+  <br><sub><b><a href="https://github.com/AkshitIreddy/Alcove">Alcove</a></b> — notes in books on a shelf you can move around in · 77&nbsp;s loop, anchor seam MSE&nbsp;0.115</sub>
+</p>
+
+<p>
+  <a href="https://github.com/AkshitIreddy/convai-desktop-pet"><img src="https://raw.githubusercontent.com/AkshitIreddy/convai-desktop-pet/master/media/desktop-demo.gif" width="49%" alt="Convai Desktop Pets — companions walking the desktop and climbing windows" /></a>
+  <a href="https://github.com/AkshitIreddy/keyscape"><img src="https://raw.githubusercontent.com/AkshitIreddy/keyscape/master/docs/assets/keyscape.webp" width="49%" alt="Keyscape — per-key RGB lighting with a live keyboard preview" /></a>
+</p>
+<p>
+  <a href="https://github.com/AkshitIreddy/Email-Briefing"><img src="https://raw.githubusercontent.com/AkshitIreddy/Email-Briefing/main/docs/demo.gif" width="49%" alt="Email Briefing — Gmail inbox distilled into topic dashboards" /></a>
+  <a href="https://github.com/AkshitIreddy/compendium"><img src="https://raw.githubusercontent.com/AkshitIreddy/compendium/main/assets/demo.webp" width="49%" alt="Compendium — a cited technique advisory rendered from demo mode" /></a>
+</p>
+
 ## Alternatives
 
 Honest landscape — reach for these when they fit better:
