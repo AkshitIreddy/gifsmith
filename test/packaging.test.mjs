@@ -40,8 +40,13 @@ function runPack() {
     stdio: ['ignore', 'pipe', 'ignore'],
     shell: process.platform === 'win32',
   });
-  // npm can prepend lifecycle noise; the JSON is the array at the end.
-  const json = out.slice(out.indexOf('['));
+  // npm can wrap the JSON in lifecycle noise. npm 11.6+ appends `npm notice`
+  // lines too, so slicing only from the first `[` leaves non-JSON after the
+  // array and makes the release workflow fail while ordinary CI stays green.
+  const start = out.indexOf('[');
+  const end = out.lastIndexOf(']');
+  if (start < 0 || end < start) throw new Error('npm pack --json returned no JSON array');
+  const json = out.slice(start, end + 1);
   const [report] = JSON.parse(json);
   return report;
 }
