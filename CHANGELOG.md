@@ -8,6 +8,18 @@ the download and the generated commit list live.
 
 ---
 
+## [0.3.2](https://github.com/AkshitIreddy/gifsmith/releases/tag/v0.3.2)
+
+### Changed
+
+- **README** — **Built with gifsmith** and the **Examples** table lead the page (under the title); bundled Aurora demo follows; example preview GIFs removed from the examples section.
+
+### Notes
+
+88 packed entries → 88.
+
+---
+
 ## [0.3.1](https://github.com/AkshitIreddy/gifsmith/releases/tag/v0.3.1)
 
 ### Changed
