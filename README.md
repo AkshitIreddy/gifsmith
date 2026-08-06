@@ -14,6 +14,57 @@ Script a walkthrough of any web (or webview-desktop) UI as a declarative timelin
 
 ---
 
+## Examples
+
+A gallery of self-contained demos, each showing a different capability — see [`examples/`](examples/) for the full set and runnable sources.
+
+| Demo | Shows |
+|---|---|
+| [Aurora](examples/hello-web/) | overlay mode · anchor loop · synthetic cursor |
+| [Pulse](examples/pulse/) | cursor journey · re-animated dashboard · anchor loop |
+| [Halo](examples/halo/) | **stage mode** — app as a window on a desktop |
+| [Forge](examples/forge/) | **camera clip** on a CI pipeline · crossfade loop |
+| [Cadence](examples/electron-app/) | the **`electron()` attach adapter** — a real Electron app, end-to-end |
+
+<p>
+  <img src="examples/pulse/demo.webp" width="49%" alt="Pulse demo" />
+  <img src="examples/halo/demo.webp" width="49%" alt="Halo stage-mode demo" />
+</p>
+
+## Built with gifsmith
+
+README demos from shipped apps — scripted walkthroughs of the real UI, looped forward, usually a few MB each.
+
+<p align="center">
+  <a href="https://github.com/AkshitIreddy/Alcove"><img src="https://raw.githubusercontent.com/AkshitIreddy/gifsmith/main/docs/showcase-alcove.webp" width="880" alt="Alcove — a hand-drawn notebook on a flat bookshelf, opening into block-edited pages" /></a>
+  <br><sub><b><a href="https://github.com/AkshitIreddy/Alcove">Alcove</a></b> — notes in books on a shelf you can move around in · 77&nbsp;s loop, anchor seam MSE&nbsp;0.115</sub>
+</p>
+
+<table>
+<tr>
+<td width="50%" align="center" valign="middle">
+<a href="https://github.com/AkshitIreddy/convai-desktop-pet"><img src="https://raw.githubusercontent.com/AkshitIreddy/convai-desktop-pet/master/media/desktop-demo.gif" height="220" alt="Convai Desktop Pets — companions walking the desktop and climbing windows" /></a><br>
+<sub><b><a href="https://github.com/AkshitIreddy/convai-desktop-pet">ConvAI Desktop Pet</a></b> — desktop companions</sub>
+</td>
+<td width="50%" align="center" valign="middle">
+<a href="https://github.com/AkshitIreddy/keyscape"><img src="https://raw.githubusercontent.com/AkshitIreddy/keyscape/master/docs/assets/keyscape.webp" height="220" alt="Keyscape — per-key RGB lighting with a live keyboard preview" /></a><br>
+<sub><b><a href="https://github.com/AkshitIreddy/keyscape">Keyscape</a></b> — per-key RGB lighting</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center" valign="middle">
+<a href="https://github.com/AkshitIreddy/Email-Briefing"><img src="https://raw.githubusercontent.com/AkshitIreddy/Email-Briefing/main/docs/demo.gif" height="220" alt="Email Briefing — Gmail inbox distilled into topic dashboards" /></a><br>
+<sub><b><a href="https://github.com/AkshitIreddy/Email-Briefing">Email Briefing</a></b> — inbox dashboards</sub>
+</td>
+<td width="50%" align="center" valign="middle">
+<a href="https://github.com/AkshitIreddy/compendium"><img src="https://raw.githubusercontent.com/AkshitIreddy/compendium/main/assets/demo.webp" height="220" alt="Compendium — a cited technique advisory rendered from demo mode" /></a><br>
+<sub><b><a href="https://github.com/AkshitIreddy/compendium">Compendium</a></b> — cited technique advisories</sub>
+</td>
+</tr>
+</table>
+
+---
+
 gifsmith is a **framework, not a one-shot recorder**. Capture and encode are commodity (and bundled); the value is the direction model: a **movie set** (stage, props, camera, a synthetic cursor), a **declarative timeline** that makes multi-phase scenes tractable, an **app-cooperation bridge** to drive your product's real engine, a **seamless forward loop** (no ping-pong reversal), **natural pacing** (holds breathe, motion flows), and **AI-agent authoring ergonomics** so a coding agent can build and self-correct a demo without eyeballing a video.
 
 ```ts
@@ -359,55 +410,6 @@ The stage reserves space under the window (`stage.bottomInset`, default 72px win
 ## Sandbox & isolation
 
 gifsmith always renders in an **isolated, throwaway browser profile** — a fresh `userDataDir` it creates under a temp work dir and deletes afterwards — so a capture never reads or writes your real browser's cookies, session, or history. It runs headless, muted, and (headful) off-screen. For CI/containers, set `chromiumSandbox: false` on the target (adds `--no-sandbox`), and there's a [`Dockerfile`](Dockerfile) for hermetic, host-independent rendering (Chromium + ffmpeg baked in).
-
-## Examples
-
-A gallery of self-contained demos, each showing a different capability — see [`examples/`](examples/) for the full set and runnable sources.
-
-| Demo | Shows |
-|---|---|
-| [Aurora](examples/hello-web/) | overlay mode · anchor loop · synthetic cursor |
-| [Pulse](examples/pulse/) | cursor journey · re-animated dashboard · anchor loop |
-| [Halo](examples/halo/) | **stage mode** — app as a window on a desktop |
-| [Forge](examples/forge/) | **camera clip** on a CI pipeline · crossfade loop |
-| [Cadence](examples/electron-app/) | the **`electron()` attach adapter** — a real Electron app, end-to-end |
-
-<p>
-  <img src="examples/pulse/demo.webp" width="49%" alt="Pulse demo" />
-  <img src="examples/halo/demo.webp" width="49%" alt="Halo stage-mode demo" />
-</p>
-
-## Built with gifsmith
-
-README demos from shipped apps — scripted walkthroughs of the real UI, looped forward, usually a few MB each.
-
-<p align="center">
-  <a href="https://github.com/AkshitIreddy/Alcove"><img src="https://raw.githubusercontent.com/AkshitIreddy/gifsmith/main/docs/showcase-alcove.webp" width="880" alt="Alcove — a hand-drawn notebook on a flat bookshelf, opening into block-edited pages" /></a>
-  <br><sub><b><a href="https://github.com/AkshitIreddy/Alcove">Alcove</a></b> — notes in books on a shelf you can move around in · 77&nbsp;s loop, anchor seam MSE&nbsp;0.115</sub>
-</p>
-
-<table>
-<tr>
-<td width="50%" align="center" valign="middle">
-<a href="https://github.com/AkshitIreddy/convai-desktop-pet"><img src="https://raw.githubusercontent.com/AkshitIreddy/convai-desktop-pet/master/media/desktop-demo.gif" height="220" alt="Convai Desktop Pets — companions walking the desktop and climbing windows" /></a><br>
-<sub><b><a href="https://github.com/AkshitIreddy/convai-desktop-pet">ConvAI Desktop Pet</a></b> — desktop companions</sub>
-</td>
-<td width="50%" align="center" valign="middle">
-<a href="https://github.com/AkshitIreddy/keyscape"><img src="https://raw.githubusercontent.com/AkshitIreddy/keyscape/master/docs/assets/keyscape.webp" height="220" alt="Keyscape — per-key RGB lighting with a live keyboard preview" /></a><br>
-<sub><b><a href="https://github.com/AkshitIreddy/keyscape">Keyscape</a></b> — per-key RGB lighting</sub>
-</td>
-</tr>
-<tr>
-<td width="50%" align="center" valign="middle">
-<a href="https://github.com/AkshitIreddy/Email-Briefing"><img src="https://raw.githubusercontent.com/AkshitIreddy/Email-Briefing/main/docs/demo.gif" height="220" alt="Email Briefing — Gmail inbox distilled into topic dashboards" /></a><br>
-<sub><b><a href="https://github.com/AkshitIreddy/Email-Briefing">Email Briefing</a></b> — inbox dashboards</sub>
-</td>
-<td width="50%" align="center" valign="middle">
-<a href="https://github.com/AkshitIreddy/compendium"><img src="https://raw.githubusercontent.com/AkshitIreddy/compendium/main/assets/demo.webp" height="220" alt="Compendium — a cited technique advisory rendered from demo mode" /></a><br>
-<sub><b><a href="https://github.com/AkshitIreddy/compendium">Compendium</a></b> — cited technique advisories</sub>
-</td>
-</tr>
-</table>
 
 ## Alternatives
 

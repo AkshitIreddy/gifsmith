@@ -8,6 +8,143 @@ the download and the generated commit list live.
 
 ---
 
+## [0.3.1](https://github.com/AkshitIreddy/gifsmith/releases/tag/v0.3.1)
+
+### Changed
+
+- **README** — move the bundled **Examples** gallery and **Built with gifsmith** showcase directly under the hero demo so npm and GitHub show the pictures before the long-form docs.
+
+---
+
+## Unreleased
+
+The release where a demo GIF can be read as a sequence rather than as a bag of
+stills.
+
+### Added
+
+**`review()` — temporal defect triage for an agent.** A visual check that samples
+every Nth frame and hands each still to a reviewer can find a duplicated block, a
+blank panel, a clipped heading — anything visible in one frame standing on its
+own. It can never find *the page skipped*, *a future page flashed*, *content
+vanished when the panel opened*, because those are properties of a SEQUENCE, and
+at 14fps a one-frame flash is not even in the sample. `review()` turns a
+1200-frame recording into a small number of places worth looking at, each with a
+contact strip of the neighbourhood — the frames that were actually adjacent, in
+order, none skipped, at a size where the text is readable.
+
+```bash
+gifsmith review qa/frames --fps 16      # standalone, no browser, no re-render
+```
+
+```ts
+review: true                            // …or as part of a render
+```
+
+Nine named rules, none of them a threshold on how big a change is — a page turn
+is *supposed* to change enormously, and a detector that flags every turn does not
+get used twice. They ask instead whether the change went somewhere
+(`progress-cut`, `progress-reversal`, `terminal-step`), whether a frame is
+anywhere between the two settled poses at all (`off-path`), whether a small
+region changed while everything around it and the same region on both sides in
+time stayed still (`region-flash`, `region-vanished`, `region-changed`), whether
+the scene came home to a pose that no longer matches (`round-trip-residue`), and
+whether any of it happened where the timeline declared stillness
+(`motion-in-hold`).
+
+`off-path` rests on the one number here that comes from an argument rather than
+from a recording: for a hard occlusion wipe between poses S and D, ‖F−S‖² =
+α‖D−S‖² and ‖F−D‖² = (1−α)‖D−S‖², so `min(dA,dB)/L ≤ 0.5` exactly. A measured
+wipe reaches 0.497; the shipped ceiling is 1.0, at which point the frame is
+further from both poses than they are from each other and cannot be a composite
+of them.
+
+**The step ledger.** `PlayContext` collected `cueTimes` and threw every other
+step boundary away. It now records one entry per `runStep` — kind, label,
+selector, scene-time span, nesting depth — which is what lets a rule say "nothing
+was supposed to move here" and what makes six page turns recognisable as six
+instances of the same scripted action. Two `clock.nowMs()` reads per step,
+collected only when something is going to read them.
+
+`parallel` runs its branches concurrently, so several steps are live at one frame
+and their contracts disagree. The live contract is a SET, resolved to its most
+permissive member, with containers transparent rather than permissive — a
+`parallel` of two holds still forbids motion.
+
+**Emitted for a reader with a Read tool**, never a number on its own: `report.md`
+(ranked, with each finding's frame, kind, region *named by position*, how far it
+departed and **what the baseline was**, and a discriminating question phrased so
+the benign answer is obvious), a three-row PNG strip per finding (context /
+every frame / the region cropped and magnified — the third row is where a
+paragraph that disappeared stops being a smudge), `coverage.md` stating the
+denominator so a capped list of twelve is an auditable claim, `trace.png` for the
+shape of the whole recording, and `review.json`.
+
+**A third outcome.** Every threshold is a quantile of the recording's own
+frame-to-frame distribution, so a clip that never settles has nothing to
+calibrate against. It reports `measurable: false` with a reason rather than
+guessing — including the case that reads as *100% quiet*: a clip moving by the
+same amount on every pair has median = p99, so `tau = 8 × median` clears every
+pair and an ambient loop would otherwise be indistinguishable from a perfectly
+still one.
+
+**No new dependency.** ffmpeg reads the frames (the raw-gray trick `loop/mse.ts`
+already used); the strips are composed in JS and written by a PNG encoder over
+`node:zlib`, with a 5×7 bitmap atlas for the labels. `drawtext` was not an option
+— it needs fontconfig, which is not universal, and the whole analysis had to be
+testable on a machine with neither a browser nor ffmpeg, which is what CI is.
+
+`88 packed entries → 108.`
+
+### Fixed
+
+**Five sources of noise, all found by running `review` against a real 1177-frame
+recording with no ledger and opening every strip it produced.** Eleven of its
+twenty findings turned out to be ordinary motion. A triage tool that is wrong
+more often than it is right gets switched off, so each was traced to a rule
+claiming more than it had measured, and the shipped detector now agrees with its
+own sentences. All eight real defects in that recording still fire.
+
+- **`progress-cut` no longer treats `unscripted` as a peer class.** Without a
+  ledger every beat lands in one bucket, and the rule then held a hover
+  affordance appearing (legitimately instant) to the median of every page turn
+  and panel slide in the recording. `unscripted` is the *absence* of a class;
+  the rule's contract was always that it needs the declaration or the siblings,
+  and with neither it now stands down and says so.
+- **`region-changed` no longer calls a change permanent when it already found
+  the return.** `findReturn` scans to the end of the recording; the persistent
+  branch ignored it and relied on `stillAway`, which samples a single frame
+  ahead. A "back to shelf" button that auto-hides while the reader reads and
+  comes back on the next pointer move produced five findings, each asserting a
+  permanent change to a control that is still there.
+- **`flashWindow` 8 → 2.** A flash is the case a sampled still review *cannot*
+  see. At 8 the rule reported every hover tooltip: appears, sits six frames,
+  dismisses, cells return — the exact shape of a flash and none of its meaning.
+  The dwell now agrees with the run-length guard directly above it, which
+  already reasons that a one-frame flash is active for exactly two pairs.
+- **`isolated` now means isolated in space.** The cell count is a count, so a
+  change scattered thinly down a whole column passed it while covering a third
+  of the picture. A scrollable panel being scrolled by two frames was the
+  highest-ranked finding in the report, above the content deletion the rule
+  exists to catch. The bounding box is held to the same share the cell count is.
+- **`matchElsewhere` compares where the frame departs, and will not name a pose
+  that is one of the endpoints.** Over the whole frame the claim "this frame is
+  showing that pose" was decided by the furniture two spreads of a book share,
+  so a mid-turn frame was matched to one 360 away with nothing in common but the
+  rail and the boards; and separately, a page turn was reported as matching a
+  frame 100 away that was pixel-for-pixel its own destination. Both made
+  `off-path`'s second gate — the one that makes "a future page showed"
+  answerable — fire on transitions that were working.
+
+### Notes
+
+Opt-in on `render()`, deliberately. This produces triage — places to look, some
+of which an agent will open and dismiss. Run unrequested on every render it
+becomes a wall of output attached to a command someone typed to get a GIF, and
+then it gets switched off, which costs more than it ever saved.
+
+---
+
 ## [0.3.0](https://github.com/AkshitIreddy/gifsmith/releases/tag/v0.3.0)
 
 The release where a demo GIF stops being a measurement of the machine that
