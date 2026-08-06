@@ -33,15 +33,15 @@ function packedFiles() {
 }
 
 /**
- * First complete top-level JSON array in `npm pack --json` stdout.
+ * First complete top-level JSON value in `npm pack --json` stdout.
  *
- * Newer npm appends `npm notice` lines after the array, and those notices can
+ * Newer npm appends `npm notice` lines after the JSON, and those notices can
  * contain `]` (integrity hashes use `[...]`). `lastIndexOf(']')` then grabs a
  * stray bracket and leaves trailing text that `JSON.parse` rejects.
  */
-export function firstJsonArray(out) {
-  const start = out.indexOf('[');
-  if (start < 0) throw new Error('npm pack --json returned no JSON array');
+export function firstJsonValue(out) {
+  const start = out.search(/[[{]/);
+  if (start < 0) throw new Error('npm pack --json returned no JSON');
   let depth = 0;
   let inStr = false;
   let esc = false;
@@ -59,7 +59,17 @@ export function firstJsonArray(out) {
       if (--depth === 0) return out.slice(start, i + 1);
     }
   }
-  throw new Error('npm pack --json returned incomplete JSON array');
+  throw new Error('npm pack --json returned incomplete JSON');
+}
+
+/** npm < 12: `[{ files, … }]`; npm ≥ 12: `{ " ": { files, … } }`. */
+function packReport(out) {
+  const parsed = JSON.parse(firstJsonValue(out));
+  const report = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
+  if (!report || !Array.isArray(report.files)) {
+    throw new Error(`unexpected npm pack --json shape: ${JSON.stringify(parsed).slice(0, 300)}`);
+  }
+  return report;
 }
 
 function runPack() {
@@ -70,18 +80,19 @@ function runPack() {
     stdio: ['ignore', 'pipe', 'ignore'],
     shell: process.platform === 'win32',
   });
-  const [report] = JSON.parse(firstJsonArray(out));
-  return report;
+  return packReport(out);
 }
 
-test('firstJsonArray ignores npm notice lines after the pack report', () => {
+test('firstJsonValue ignores npm notice lines after the pack report', () => {
   const array = '[{"name":"gifsmith","files":[{"path":"dist/index.js"}]}]';
+  const object = '{"gifsmith-0.3.0.tgz":{"name":"gifsmith","files":[{"path":"dist/index.js"}]}}';
   const noisy = `${array}\nnpm notice\nnpm notice integrity: sha512-abc[...]xyz==\nnpm notice total files: 1\n`;
-  assert.deepEqual(JSON.parse(firstJsonArray(noisy)), JSON.parse(array));
+  assert.deepEqual(JSON.parse(firstJsonValue(noisy)), JSON.parse(array));
   assert.deepEqual(
-    JSON.parse(firstJsonArray(`noise before\n${array}\nnpm notice ] stray`)),
+    JSON.parse(firstJsonValue(`noise before\n${array}\nnpm notice ] stray`)),
     JSON.parse(array),
   );
+  assert.equal(packReport(object).files.length, 1);
 });
 
 test('the MCP SDK is an optional peer, never something npm installs by default', () => {
