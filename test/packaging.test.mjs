@@ -32,6 +32,36 @@ function packedFiles() {
   return (packed ??= runPack());
 }
 
+/**
+ * First complete top-level JSON array in `npm pack --json` stdout.
+ *
+ * Newer npm appends `npm notice` lines after the array, and those notices can
+ * contain `]` (integrity hashes use `[...]`). `lastIndexOf(']')` then grabs a
+ * stray bracket and leaves trailing text that `JSON.parse` rejects.
+ */
+export function firstJsonArray(out) {
+  const start = out.indexOf('[');
+  if (start < 0) throw new Error('npm pack --json returned no JSON array');
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < out.length; i++) {
+    const c = out[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '[' || c === '{') depth++;
+    else if (c === ']' || c === '}') {
+      if (--depth === 0) return out.slice(start, i + 1);
+    }
+  }
+  throw new Error('npm pack --json returned incomplete JSON array');
+}
+
 function runPack() {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const out = execFileSync(npm, ['pack', '--dry-run', '--json'], {
@@ -40,16 +70,19 @@ function runPack() {
     stdio: ['ignore', 'pipe', 'ignore'],
     shell: process.platform === 'win32',
   });
-  // npm can wrap the JSON in lifecycle noise. npm 11.6+ appends `npm notice`
-  // lines too, so slicing only from the first `[` leaves non-JSON after the
-  // array and makes the release workflow fail while ordinary CI stays green.
-  const start = out.indexOf('[');
-  const end = out.lastIndexOf(']');
-  if (start < 0 || end < start) throw new Error('npm pack --json returned no JSON array');
-  const json = out.slice(start, end + 1);
-  const [report] = JSON.parse(json);
+  const [report] = JSON.parse(firstJsonArray(out));
   return report;
 }
+
+test('firstJsonArray ignores npm notice lines after the pack report', () => {
+  const array = '[{"name":"gifsmith","files":[{"path":"dist/index.js"}]}]';
+  const noisy = `${array}\nnpm notice\nnpm notice integrity: sha512-abc[...]xyz==\nnpm notice total files: 1\n`;
+  assert.deepEqual(JSON.parse(firstJsonArray(noisy)), JSON.parse(array));
+  assert.deepEqual(
+    JSON.parse(firstJsonArray(`noise before\n${array}\nnpm notice ] stray`)),
+    JSON.parse(array),
+  );
+});
 
 test('the MCP SDK is an optional peer, never something npm installs by default', () => {
   const name = '@modelcontextprotocol/sdk';
