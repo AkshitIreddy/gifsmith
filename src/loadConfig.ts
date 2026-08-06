@@ -119,6 +119,19 @@ function withoutOurOwnFile(message: string): string {
  * spawning a process, and so the two bins cannot drift apart on the wording.
  */
 export function moduleLoadProblem(e: unknown, file: string): string | null {
+  // Node 24 can strip types from `.ts` files while Node 18/20 report
+  // ERR_UNKNOWN_FILE_EXTENSION. Gifsmith supports all three, so accepting the
+  // same config on only one runner would make the CLI version-dependent. Keep
+  // the documented JavaScript-module contract stable across the support
+  // matrix, including when a newer Node happens to import the file.
+  const extension = path.extname(file).toLowerCase();
+  if (['.ts', '.mts', '.cts', '.tsx'].includes(extension)) {
+    return (
+      `cannot load config ${file} — node cannot import a ${extension} module consistently across ` +
+      `gifsmith's supported versions. Write the config as .mjs (or .js in a "type":"module" package).`
+    );
+  }
+
   if (ranUserCode(e)) return null;
   const err = e as { code?: unknown; message?: unknown; name?: unknown };
   const message = withoutOurOwnFile(String(err?.message ?? e).split('\n')[0]);
@@ -136,9 +149,6 @@ export function moduleLoadProblem(e: unknown, file: string): string | null {
     // nowhere to go, and a `.ts` config is a thing people reasonably try — the
     // usage line says `.mjs|.js` and this is where they find out why.
     //
-    // Not checked BEFORE the import, which is the obvious alternative and is
-    // wrong: `NODE_OPTIONS=--import tsx` makes a `.ts` config work, and a guard
-    // on the extension would refuse a command line that runs today.
     if (err.code === 'ERR_UNKNOWN_FILE_EXTENSION') {
       const ext = path.extname(file);
       return (
@@ -184,6 +194,9 @@ export async function loadConfigModule(
   if (!fs.existsSync(abs)) {
     throw asError(`cannot open config ${file} — no such file (looked in ${abs})`);
   }
+
+  const unsupported = moduleLoadProblem(null, file);
+  if (unsupported) throw asError(unsupported);
 
   let mod: Record<string, unknown>;
   try {
