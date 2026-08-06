@@ -1,7 +1,7 @@
 {
   "name": "gifsmith",
-  "version": "0.2.3",
-  "description": "A movie-set framework for browser/app demo GIFs \u2014 script a walkthrough of any web or webview UI and get a tiny, smooth, seamless looping README GIF/WebP. Like vhs, but for GUI apps.",
+  "version": "0.3.0",
+  "description": "A movie-set framework for browser/app demo GIFs — script a walkthrough of any web or webview UI and get a tiny, smooth, seamless looping README GIF/WebP. Like vhs, but for GUI apps.",
   "keywords": [
     "demo",
     "gif",
@@ -49,13 +49,16 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "watch": "tsc -p tsconfig.json --watch",
+    "build:dev": "tsc -p tsconfig.dev.json",
+    "watch": "tsc -p tsconfig.dev.json --watch",
+    "test": "npm run build && node --test test/",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepublishOnly": "npm run clean && npm run build",
     "example": "npm run build && node examples/hello-web/demo.mjs",
@@ -64,10 +67,16 @@
   "dependencies": {
     "puppeteer-core": "^23.0.0"
   },
-  "optionalDependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "@types/node": "^20.11.0",
     "typescript": "^5.4.0"
   }

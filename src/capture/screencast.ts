@@ -14,16 +14,14 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import type { CDPSession, Page } from 'puppeteer-core';
+import type { Page } from 'puppeteer-core';
 import type { CameraClip } from '../types.js';
 import { Logger } from '../log.js';
+import type { CaptureHandle } from './handle.js';
 
-export interface CaptureHandle {
-  client: CDPSession;
-  frames: string[];        // absolute file paths, in capture order
-  timestamps: number[];    // seconds, from CDP metadata
-  stop(): Promise<void>;
-}
+// The handle moved to ./handle.ts once a second backend needed it; re-exported
+// here so every existing importer keeps working.
+export type { CaptureHandle };
 
 // A steady stream of paints during otherwise-static holds, so the screencast
 // keeps emitting frames and their real timestamps time the hold accurately.
@@ -60,6 +58,17 @@ const HEARTBEAT_STOP = `
 
 export interface ScreencastOptions {
   quality?: number;
+  /**
+   * Frame image format, `'jpeg'` (default) or `'png'`.
+   *
+   * PNG frames are lossless, and on this backend that is a real trade rather
+   * than a free win: they are several times larger and slower to encode, so the
+   * screencast delivers fewer paints per second — and a capture rate below the
+   * output fps is visible as steppy motion, which is worse than the JPEG loss
+   * it removes. Check `achievedCaptureFps` in the result before keeping it. The
+   * deterministic backend has no such trade (it never races the clock).
+   */
+  format?: 'jpeg' | 'png';
   /** Restrict emitted frames to the camera region for smaller jpegs (optional). */
   clip?: CameraClip | null;
   heartbeat?: boolean;
@@ -75,6 +84,8 @@ export async function startScreencast(
   if (opts.heartbeat !== false) await page.evaluate(HEARTBEAT);
 
   const client = await page.target().createCDPSession();
+  const format = opts.format ?? 'jpeg';
+  const ext = format === 'png' ? '.png' : '.jpg';
   const frames: string[] = [];
   const timestamps: number[] = [];
   let index = 0;
@@ -89,7 +100,7 @@ export async function startScreencast(
       return;
     }
     const ts = metadata?.timestamp ?? Date.now() / 1000;
-    const file = path.join(framesDir, String(index++).padStart(5, '0') + '.jpg');
+    const file = path.join(framesDir, String(index++).padStart(5, '0') + ext);
     try {
       fs.writeFileSync(file, Buffer.from(data, 'base64'));
       frames.push(file);
@@ -102,8 +113,8 @@ export async function startScreencast(
   });
 
   await client.send('Page.startScreencast', {
-    format: 'jpeg',
-    quality: opts.quality ?? 92,
+    format,
+    ...(format === 'jpeg' ? { quality: opts.quality ?? 92 } : {}),
     everyNthFrame: 1,
   });
 

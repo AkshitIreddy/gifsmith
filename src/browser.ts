@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import puppeteer, { type Browser, type Page } from 'puppeteer-core';
 import type { BrowserTarget, Viewport } from './types.js';
+import { EnvironmentError } from './errors.js';
 import { Logger } from './log.js';
 
 export function findChrome(explicit?: string): string {
@@ -39,7 +40,9 @@ export function findChrome(explicit?: string): string {
   const list = candidates[process.platform] || [];
   const hit = list.find((p) => fs.existsSync(p));
   if (!hit) {
-    throw new Error(
+    // The machine is missing something, which is not a bug and not a typo — one
+    // line, no stack. `gifsmith doctor` already prints it without throwing.
+    throw new EnvironmentError(
       'gifsmith: no Chromium-based browser found. Install Chrome/Edge/Brave, ' +
         'or set PUPPETEER_EXECUTABLE_PATH to the binary.',
     );

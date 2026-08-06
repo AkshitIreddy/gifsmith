@@ -7,7 +7,7 @@
  * catches a broken scene early instead of shipping a blank GIF.
  */
 import type { Page } from 'puppeteer-core';
-import type { CameraClip } from '../types.js';
+import type { CallContext, CameraClip } from '../types.js';
 
 export async function expectVisible(page: Page, selector: string): Promise<void> {
   const ok = (await page.evaluate((sel: string) => {
@@ -24,11 +24,26 @@ export async function expectVisible(page: Page, selector: string): Promise<void>
  * Assert a region is visually stable over `ms` (nothing is still animating).
  * Compares two screenshots pixel-for-pixel; a stable region is a good place to
  * put a loopAnchor.
+ *
+ * PASS THE CALLBACK'S `ctx` UNDER `capture: 'deterministic'`, or this measures
+ * nothing. The wait between the two screenshots is where the animation is meant
+ * to happen, and a bare `setTimeout` does not move a virtual clock — the scene
+ * is frozen across both shots, every region is trivially stable, and passing is
+ * not evidence of anything. With `ctx` the wait becomes `ms` of *scene* time and
+ * the assertion means what it says on both backends:
+ *
+ *   t.call(async (page, ctx) => { await expectStable(page, region, 300, ctx); });
  */
-export async function expectStable(page: Page, region: CameraClip, ms = 300): Promise<void> {
+export async function expectStable(
+  page: Page,
+  region: CameraClip,
+  ms = 300,
+  ctx?: Pick<CallContext, 'advance'>,
+): Promise<void> {
   const shot = () => page.screenshot({ clip: region, type: 'png' }) as Promise<Buffer>;
   const a = await shot();
-  await new Promise((r) => setTimeout(r, ms));
+  if (ctx) await ctx.advance(ms);
+  else await new Promise((r) => setTimeout(r, ms));
   const b = await shot();
   if (!a.equals(b)) throw new Error(`gifsmith.expectStable: region is still changing after ${ms}ms`);
 }

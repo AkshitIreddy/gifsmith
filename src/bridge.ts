@@ -28,13 +28,22 @@ export const RUNTIME_JS = String.raw`
     easeOut: function (t) { return 1 - (1 - t) * (1 - t); },
     easeInOut: function (t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; },
   };
+  // NOTE the timestamp: performance.now() read INSIDE the callback, not the
+  // argument requestAnimationFrame hands us. Under real time the two differ by
+  // a few hundred microseconds and it makes no odds. Under a virtual clock they
+  // are different clocks entirely — measured: performance.now() steps by
+  // exactly the granted budget (166 -> 250.4ms) while the rAF timestamp runs on
+  // the compositor's own timeline, ~1350ms ahead of it and climbing ~4ms per
+  // callback. Mixing the two makes (now - t0) enormous on the very first
+  // callback, so every tween completes in one frame and the cursor teleports
+  // instead of gliding. One clock, read one way.
   function tween(durMs, easingName, apply) {
     return new Promise(function (res) {
       if (durMs <= 0) { apply(1); return res(); }
       const ease = easings[easingName] || easings.easeInOut;
       const t0 = performance.now();
-      function step(now) {
-        const p = Math.min(1, (now - t0) / durMs);
+      function step() {
+        const p = Math.min(1, (performance.now() - t0) / durMs);
         apply(ease(p));
         if (p < 1) requestAnimationFrame(step); else res();
       }
@@ -70,15 +79,27 @@ export const RUNTIME_JS = String.raw`
       el.style.left = start.x + 'px';
       el.style.top = start.y + 'px';
     },
+    // How long a glide to (x, y) will actually last. Split out of cursorTo so a
+    // deterministic render can ask BEFORE starting the tween: an auto-timed
+    // glide is measured from the cursor's current position inside the page, so
+    // Node cannot know its duration, and a duration Node does not know is a
+    // tween a virtual clock cannot drive. One formula, two callers.
+    autoDurMs: function (x, y, durMs) {
+      if (durMs && durMs > 0) return durMs;
+      if (!G.cursor) return 0;
+      // auto: ~900px/s with a floor and ceiling, so glides read naturally
+      // at any distance instead of teleporting across long travels
+      const dist = Math.hypot(x - G.cursor.x, y - G.cursor.y);
+      return Math.max(340, Math.min(1150, dist * 1.1));
+    },
+    glideMsToSelector: function (sel, durMs) {
+      const p = G.centerOf(sel);
+      return p ? G.autoDurMs(p.x, p.y, durMs) : 0;
+    },
     cursorTo: function (x, y, durMs, easing) {
       if (!G.cursor) return Promise.resolve();
       const c = G.cursor, sx = c.x, sy = c.y;
-      if (!durMs || durMs <= 0) {
-        // auto: ~900px/s with a floor and ceiling, so glides read naturally
-        // at any distance instead of teleporting across long travels
-        const dist = Math.hypot(x - sx, y - sy);
-        durMs = Math.max(340, Math.min(1150, dist * 1.1));
-      }
+      durMs = G.autoDurMs(x, y, durMs);
       return tween(durMs, easing, function (p) {
         c.x = sx + (x - sx) * p;
         c.y = sy + (y - sy) * p;

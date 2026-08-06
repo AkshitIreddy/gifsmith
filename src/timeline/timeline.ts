@@ -131,11 +131,41 @@ export class TimelineBuilder {
     return this.push({ kind: 'pace', multiplier });
   }
 
-  /** Run an arbitrary author callback against the Puppeteer Page. */
-  call(fn: PageCallback): this {
+  /**
+   * Run an arbitrary author callback against the Puppeteer Page.
+   *
+   * The callback receives `(page, ctx)`. `ctx` is the scene clock — `advance(ms)`
+   * to spend time and `settle(promise)` to wait on the page — and using it is
+   * what makes a callback work under `capture: 'deterministic'`, where a bare
+   * `setTimeout` buys real time and no rendered frames. See CallContext.
+   *
+   * `name` it if you have more than a couple: the stall watchdog, the settle
+   * timeout and the unclocked-wait report all quote this label, and `call#7` is
+   * a poor thing to be told about at minute three of a render. The function's
+   * own name is used when you pass a named function.
+   *
+   * `seconds` declares how much scene time the callback spends, and exists
+   * because nothing else can know. A `call` scored as zero was true while a
+   * callback had no way to spend scene time; now that `ctx.advance` is the
+   * recommended way to wait, a deterministic scene can be mostly callbacks and
+   * `dryRun` would report a fraction of its real length — the planned duration
+   * is what an author checks a script against before paying for a render.
+   *
+   * Declared rather than measured on purpose: the alternative is running the
+   * callback against a fake page and a fake clock at plan time, which executes
+   * author code (with side effects, against a page that is not there) to
+   * produce an estimate, and gives up the moment a callback branches on
+   * anything real. A number the author writes is honest about being a number
+   * the author wrote. dryRun says how many callbacks have not declared one.
+   */
+  call(fn: PageCallback, opts: { name?: string; seconds?: number } = {}): this {
     const label = `call#${this.reg.callSeq++}`;
     this.reg.calls[label] = fn;
-    return this.push({ kind: 'call', label });
+    const name = opts.name ?? (fn.name || undefined);
+    const s: Extract<Step, { kind: 'call' }> = { kind: 'call', label };
+    if (name) s.name = name;
+    if (opts.seconds != null && opts.seconds > 0) s.seconds = opts.seconds;
+    return this.push(s);
   }
 
   /** Mark a named moment (for introspection and snapshot targeting). */
@@ -187,6 +217,12 @@ export function timeline(build: (t: TimelineBuilder) => void): CompiledTimeline 
  * Estimate the planned wall-clock length of a compiled timeline (holds +
  * timed motions; discrete actions count as ~0). Used by dryRun and to size
  * capture safety timeouts. `parallel` takes the max of its branches.
+ *
+ * A `call` counts for its declared `seconds` and nothing otherwise. Scoring it
+ * as zero was correct while a callback had no way to spend scene time; a
+ * callback that holds the scene for two seconds with `ctx.advance` is two
+ * seconds of the render, and pretending otherwise under-reports a deterministic
+ * scene by however much its callbacks spend.
  */
 export function estimateSeconds(steps: Step[]): number {
   let total = 0;
@@ -194,6 +230,9 @@ export function estimateSeconds(steps: Step[]): number {
     switch (s.kind) {
       case 'hold':
         total += s.ms / 1000;
+        break;
+      case 'call':
+        total += s.seconds ?? 0;
         break;
       case 'scroll':
       case 'cursorTo':

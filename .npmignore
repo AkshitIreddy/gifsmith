@@ -1,7 +1,34 @@
-# Publish only dist + docs (see package.json "files"); this is a backstop.
+# Backstop only. package.json "files" is what actually decides the tarball:
+# dist/ minus its source maps, plus README.md, CHANGELOG.md and LICENSE.
+#
+# NOT docs/ — this line used to claim "publish only dist + docs", which was never
+# true. docs/ is not in "files" and was correctly never shipped: it holds the
+# rendered example GIFs, and docs/demo.gif alone is 3.4 MB against a ~130 KB
+# package. They belong in the repo and behind the README's image URLs, not in
+# every install.
+#
+# NOT the source maps either. Every dist/**/*.js.map and *.d.ts.map lists
+# `sources: ["../src/*.ts"]` with no `sourcesContent`, and src/ is deliberately
+# not published — so each shipped map resolved to a file that was not there and
+# debugged nothing, for 152 KB and 34% of the unpacked tarball. Emitting
+# `sourcesContent` instead would put the whole TypeScript source inside the maps,
+# which is larger than shipping src/ outright and still slower to load.
+#
+# Excluding them from the tarball was only half the job, and the half that
+# leaves no trace. The build still EMITTED maps, so every shipped .js and .d.ts
+# ended with `//# sourceMappingURL=…` pointing at a file that was no longer in
+# the package: 78 of them. Node ignores that silently; bundlers and
+# source-map-loader warn once per file, and an editor asked to follow a
+# declaration map finds nothing. So `tsc -p tsconfig.json` — the build that
+# ships — emits no maps at all and therefore no comments, and the two lines
+# below stay as a backstop for a dist/ left over from a dev build. Local
+# development keeps its maps: `npm run watch` and `npm run build:dev` use
+# tsconfig.dev.json, where the sources they point at do exist.
 src/
 examples/
+docs/
 .github/
 tsconfig.json
+tsconfig.dev.json
 *.tsbuildinfo
 .gifsmith/
